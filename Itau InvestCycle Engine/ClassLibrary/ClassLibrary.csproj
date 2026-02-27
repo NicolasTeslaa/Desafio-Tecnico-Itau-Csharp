@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -10,7 +10,6 @@
     <Folder Include="Common\BaseTypes\" />
     <Folder Include="Common\Errors\" />
     <Folder Include="Common\Auditing\" />
-    <Folder Include="Contracts\DTOs\" />
     <Folder Include="Domain\Enums\" />
     <Folder Include="Domain\ValueObjects\" />
   </ItemGroup>

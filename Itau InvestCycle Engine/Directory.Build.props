@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!-- Use user temp to avoid locked/permissioned repo folders -->
+    <MSBuildProjectExtensionsPath>$(TEMP)\msbuild\$(MSBuildProjectName)\</MSBuildProjectExtensionsPath>
+    <BaseIntermediateOutputPath>$(MSBuildProjectExtensionsPath)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildProjectDirectory)\..\artifacts\bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <!-- Ensure old obj/bin/artifacts folders are not globbed into Compile items -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildProjectDirectory)\obj\**;$(MSBuildProjectDirectory)\bin\**;$(MSBuildProjectDirectory)\artifacts\**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

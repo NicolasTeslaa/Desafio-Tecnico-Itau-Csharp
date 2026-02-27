@@ -7,7 +7,7 @@ public class Cotacoes
 {
     public int Id { get; set; }
     public DateTime DataPregao { get; set; }
-    [MaxLength(10)]
+    [MaxLength(12)]
     public string Ticker { get; set; }
     public decimal PrecoAbertura { get; set; }
     public decimal PrecoFechamento { get; set; }

@@ -1,23 +1,39 @@
+﻿using MarketDataIngestionService.Data;
+using MarketDataIngestionService.Interfaces;
+using MarketDataIngestionService.Parser;
+using MarketDataIngestionService.Repositories;
+using MarketDataIngestionService.Services;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+
+// ✅ Swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var conn = builder.Configuration.GetConnectionString("mysql")
+          ?? throw new InvalidOperationException("Missing connection string 'mysql'.");
+
+builder.Services.AddDbContext<MarketDataDbContext>(opt =>
+{
+    opt.UseMySql(conn, ServerVersion.AutoDetect(conn));
+});
+
+builder.Services.AddScoped<ICotacoesRepository, CotacoesRepository>();
+builder.Services.AddScoped<ICotacoesService, CotacoesService>();
+builder.Services.AddScoped<CotahistParser>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
