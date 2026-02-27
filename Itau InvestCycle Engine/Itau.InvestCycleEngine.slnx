@@ -1,4 +1,15 @@
 <Solution>
+  <Folder Name="/Docs/">
+    <File Path="docs/desafio-tecnico-compra-programada.md" />
+    <File Path="docs/diagrama-er-compra-programada.drawio" />
+    <File Path="docs/diagrama-negocios-compra-programada.drawio" />
+    <File Path="docs/diagrama-sequencia-compra-programada.drawio" />
+    <File Path="docs/exemplos-contratos-api.md" />
+    <File Path="docs/glossario-compra-programada.md" />
+    <File Path="docs/layout-cotahist-b3.md" />
+    <File Path="docs/regras-negocio-detalhadas.md" />
+  </Folder>
   <Project Path="ClassLibrary/ClassLibrary.csproj" />
   <Project Path="MarketDataIngestionService/MarketDataIngestionService.csproj" />
+  <Project Path="ScheduledPurchaseEngineService/ScheduledPurchaseEngineService.csproj" />
 </Solution>
