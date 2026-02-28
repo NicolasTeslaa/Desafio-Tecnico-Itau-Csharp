@@ -6,8 +6,17 @@ namespace MarketDataIngestionService.Parser;
 
 public sealed class CotahistParser
 {
+    private const int DetailRecordLength = 245;
+    private static readonly HashSet<string> AllowedBdiCodes = ["02", "96"];
+    private static readonly HashSet<string> AllowedMarketTypes = ["010", "020"];
+
     private static readonly Encoding FileEncoding =
         Encoding.GetEncoding("ISO-8859-1");
+
+    static CotahistParser()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
 
     public IEnumerable<CotahistPriceRecord> ParseStream(Stream stream)
     {
@@ -18,10 +27,16 @@ public sealed class CotahistParser
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
 
-            var tipreg = GetTipReg(line);
+            if (line.Length != DetailRecordLength) continue;
+
+            var tipreg = Sub(line, 1, 2);
             if (tipreg != "01") continue;
 
-            if (line.Length < 188) continue;
+            var codBdi = Sub(line, 11, 12).Trim();
+            if (!AllowedBdiCodes.Contains(codBdi)) continue;
+
+            var marketType = Sub(line, 25, 27).Trim();
+            if (!AllowedMarketTypes.Contains(marketType)) continue;
 
             var tradeDate = ParseDate(Sub(line, 3, 10));
             var symbol = Sub(line, 13, 24).Trim();
@@ -44,14 +59,6 @@ public sealed class CotahistParser
                 Volume: vol
             );
         }
-    }
-
-    // (keep your helpers)
-    private static string GetTipReg(string line)
-    {
-        var trimmedLeft = line.TrimStart();
-        if (trimmedLeft.Length < 2) return "";
-        return trimmedLeft.Substring(0, 2);
     }
 
     private static string Sub(string line, int start1Based, int end1Based)

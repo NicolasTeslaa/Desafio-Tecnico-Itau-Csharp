@@ -8,8 +8,8 @@
 
   <ItemGroup>
     <Folder Include="Common\BaseTypes\" />
-    <Folder Include="Common\Errors\" />
     <Folder Include="Common\Auditing\" />
+    <Folder Include="Common\Errors\" />
     <Folder Include="Domain\Enums\" />
     <Folder Include="Domain\ValueObjects\" />
   </ItemGroup>
