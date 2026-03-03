@@ -11,10 +11,7 @@ public sealed class ClientController : ControllerBase
 {
     private readonly IClentService _service;
 
-    public ClientController(IClentService service)
-    {
-        _service = service;
-    }
+    public ClientController(IClentService service) => _service = service;
 
     [HttpPost("adesao")]
     [ProducesResponseType(typeof(AdesaoClienteResponse), StatusCodes.Status201Created)]
@@ -22,10 +19,9 @@ public sealed class ClientController : ControllerBase
     public async Task<IActionResult> Adesao([FromBody] AdesaoClienteRequest request, CancellationToken ct)
     {
         var result = await _service.AdesaoProdutoAsync(request, ct);
+
         if (!result.IsSuccess)
-        {
             return ToErrorResponse(result.Err!);
-        }
 
         return StatusCode(StatusCodes.Status201Created, result.Ok!);
     }
@@ -37,10 +33,9 @@ public sealed class ClientController : ControllerBase
     public async Task<IActionResult> Saida([FromRoute] int clienteId, CancellationToken ct)
     {
         var result = await _service.SairDoProdutoAsync(clienteId, ct);
+
         if (!result.IsSuccess)
-        {
             return ToErrorResponse(result.Err!);
-        }
 
         return Ok(result.Ok!);
     }
@@ -51,10 +46,9 @@ public sealed class ClientController : ControllerBase
     public async Task<IActionResult> Excluir([FromRoute] int clienteId, CancellationToken ct)
     {
         var result = await _service.ExcluirClienteAsync(clienteId, ct);
+
         if (!result.IsSuccess)
-        {
             return ToErrorResponse(result.Err!);
-        }
 
         return Ok(result.Ok!);
     }
@@ -66,10 +60,9 @@ public sealed class ClientController : ControllerBase
     public async Task<IActionResult> AlterarValorMensal([FromRoute] int clienteId, [FromBody] AlterarValorMensalRequest request, CancellationToken ct)
     {
         var result = await _service.AlterarValorMensalAsync(clienteId, request, ct);
+
         if (!result.IsSuccess)
-        {
             return ToErrorResponse(result.Err!);
-        }
 
         return Ok(result.Ok!);
     }
@@ -80,10 +73,9 @@ public sealed class ClientController : ControllerBase
     public async Task<IActionResult> ConsultarCarteira([FromRoute] int clienteId, CancellationToken ct)
     {
         var result = await _service.ConsultarCarteiraAsync(clienteId, ct);
+
         if (!result.IsSuccess)
-        {
             return ToErrorResponse(result.Err!);
-        }
 
         return Ok(result.Ok!);
     }
@@ -94,10 +86,9 @@ public sealed class ClientController : ControllerBase
     public async Task<IActionResult> ConsultarRentabilidade([FromRoute] int clienteId, CancellationToken ct)
     {
         var result = await _service.ConsultarRentabilidadeAsync(clienteId, ct);
+
         if (!result.IsSuccess)
-        {
             return ToErrorResponse(result.Err!);
-        }
 
         return Ok(result.Ok!);
     }
@@ -105,9 +96,7 @@ public sealed class ClientController : ControllerBase
     private IActionResult ToErrorResponse(ApiError error)
     {
         if (error.Codigo == "CLIENTE_NAO_ENCONTRADO")
-        {
             return NotFound(error);
-        }
 
         return BadRequest(error);
     }

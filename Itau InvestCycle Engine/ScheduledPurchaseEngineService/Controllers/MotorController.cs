@@ -12,10 +12,7 @@ public sealed class MotorController : ControllerBase
 {
     private readonly IScheduledPurchaseEngine _engine;
 
-    public MotorController(IScheduledPurchaseEngine engine)
-    {
-        _engine = engine;
-    }
+    public MotorController(IScheduledPurchaseEngine engine) => _engine = engine;
 
     [HttpPost("executar-compra")]
     [ProducesResponseType(typeof(ExecutarCompraResponse), StatusCodes.Status200OK)]

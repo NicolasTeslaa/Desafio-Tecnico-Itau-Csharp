@@ -6,8 +6,12 @@
     <File Path="docs/diagrama-sequencia-compra-programada.drawio" />
     <File Path="docs/exemplos-contratos-api.md" />
     <File Path="docs/glossario-compra-programada.md" />
+    <File Path="docs/integracao-frontend-classlibrary.md" />
     <File Path="docs/layout-cotahist-b3.md" />
     <File Path="docs/regras-negocio-detalhadas.md" />
+  </Folder>
+  <Folder Name="/Itens de Solução/">
+    <File Path="docker-compose.yml" />
   </Folder>
   <Project Path="ClassLibrary/ClassLibrary.csproj" />
   <Project Path="MarketDataIngestionService/MarketDataIngestionService.csproj" />
