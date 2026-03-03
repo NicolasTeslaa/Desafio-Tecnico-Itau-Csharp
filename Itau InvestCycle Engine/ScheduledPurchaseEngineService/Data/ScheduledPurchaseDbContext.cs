@@ -2,8 +2,6 @@
 using ClassLibrary.Domain.Entities.Cestas;
 using ClassLibrary.Domain.Entities.Clientes;
 using ClassLibrary.Domain.Entities.CompraDistribuicao;
-using ClassLibrary.Domain.Entities.RebalanceamentoIR;
-using Itau.InvestCycleEngine.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ScheduledPurchaseEngineService.Data;
@@ -12,10 +10,6 @@ public sealed class ScheduledPurchaseDbContext : DbContext
 {
     public ScheduledPurchaseDbContext(DbContextOptions<ScheduledPurchaseDbContext> options) : base(options) { }
 
-    public DbSet<Asset> Assets => Set<Asset>();
-    public DbSet<InvestmentAccount> InvestmentAccounts => Set<InvestmentAccount>();
-    public DbSet<PlanExecution> PlanExecutions => Set<PlanExecution>();
-    public DbSet<ProgrammedPurchasePlan> ProgrammedPurchasePlans => Set<ProgrammedPurchasePlan>();
     public DbSet<Cotacoes> Cotacoes => Set<Cotacoes>();
     public DbSet<CestasRecomendacao> CestasRecomendacao => Set<CestasRecomendacao>();
     public DbSet<ItensCesta> ItensCesta => Set<ItensCesta>();
@@ -25,53 +19,9 @@ public sealed class ScheduledPurchaseDbContext : DbContext
     public DbSet<Custodias> Custodias => Set<Custodias>();
     public DbSet<Distribuicoes> Distribuicoes => Set<Distribuicoes>();
     public DbSet<OrdensCompra> OrdensCompra => Set<OrdensCompra>();
-    public DbSet<EventosIR> EventosIR => Set<EventosIR>();
-    public DbSet<Rebalanceamentos> Rebalanceamentos => Set<Rebalanceamentos>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<Asset>(e =>
-        {
-            e.ToTable("assets");
-            e.HasKey(x => x.Id);
-        });
-
-        modelBuilder.Entity<InvestmentAccount>(e =>
-        {
-            e.ToTable("investment_accounts");
-            e.HasKey(x => x.Id);
-        });
-
-        modelBuilder.Entity<PlanExecution>(e =>
-        {
-            e.ToTable("plan_executions");
-            e.HasKey(x => x.Id);
-        });
-
-        modelBuilder.Entity<ProgrammedPurchasePlan>(e =>
-        {
-            e.ToTable("programmed_purchase_plans");
-            e.HasKey(x => x.Id);
-
-            e.ComplexProperty(x => x.AmountPerRun, money =>
-            {
-                money.Property(p => p.Amount)
-                    .HasColumnName("amount_per_run")
-                    .HasPrecision(18, 2);
-                money.Property(p => p.Currency)
-                    .HasColumnName("amount_currency");
-            });
-
-            e.OwnsOne(x => x.Schedule, schedule =>
-            {
-                schedule.Property(p => p.Frequency).HasColumnName("schedule_frequency");
-                schedule.Property(p => p.Interval).HasColumnName("schedule_interval");
-                schedule.Property(p => p.DayOfWeek).HasColumnName("schedule_day_of_week");
-                schedule.Property(p => p.DayOfMonth).HasColumnName("schedule_day_of_month");
-                schedule.Property(p => p.RunAtLocalTime).HasColumnName("schedule_run_at_local_time");
-            });
-        });
-
         modelBuilder.Entity<Cotacoes>(e =>
         {
             e.ToTable("cotacoes");
@@ -174,31 +124,5 @@ public sealed class ScheduledPurchaseDbContext : DbContext
                 .HasForeignKey(x => x.ContaMasterId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-
-        modelBuilder.Entity<EventosIR>(e =>
-        {
-            e.ToTable("eventos_ir");
-            e.Property(x => x.ValorBase).HasPrecision(18, 2);
-            e.Property(x => x.ValorIR).HasPrecision(18, 2);
-
-            e.HasOne(x => x.Cliente)
-                .WithMany()
-                .HasForeignKey(x => x.ClienteId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<Rebalanceamentos>(e =>
-        {
-            e.ToTable("rebalanceamentos");
-            e.Property(x => x.TickerVendido).HasMaxLength(10);
-            e.Property(x => x.TickerComprado).HasMaxLength(10);
-            e.Property(x => x.ValorVenda).HasPrecision(18, 2);
-
-            e.HasOne(x => x.Cliente)
-                .WithMany()
-                .HasForeignKey(x => x.ClienteId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
     }
 }
-
