@@ -2,6 +2,8 @@
 using ClassLibrary.Domain.Entities.Cestas;
 using ClassLibrary.Domain.Entities.Clientes;
 using ClassLibrary.Domain.Entities.CompraDistribuicao;
+using ClassLibrary.Domain.Entities.RebalanceamentoIR;
+using Itau.InvestCycleEngine.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ScheduledPurchaseEngineService.Data;
@@ -19,6 +21,9 @@ public sealed class ScheduledPurchaseDbContext : DbContext
     public DbSet<Custodias> Custodias => Set<Custodias>();
     public DbSet<Distribuicoes> Distribuicoes => Set<Distribuicoes>();
     public DbSet<OrdensCompra> OrdensCompra => Set<OrdensCompra>();
+    public DbSet<EventosIR> EventosIR => Set<EventosIR>();
+    public DbSet<Rebalanceamentos> Rebalanceamentos => Set<Rebalanceamentos>();
+    public DbSet<MotorExecucao> MotorExecucoes => Set<MotorExecucao>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -55,6 +60,7 @@ public sealed class ScheduledPurchaseDbContext : DbContext
             e.ToTable("clientes");
 
             e.Property(x => x.Nome).HasMaxLength(200);
+            e.Property(x => x.ValorMensal).HasPrecision(18, 2);
 
             e.Property(x => x.CPF)
                 .HasMaxLength(11)
@@ -71,8 +77,8 @@ public sealed class ScheduledPurchaseDbContext : DbContext
         {
             e.ToTable("cliente_valor_mensal_historico");
             e.HasKey(x => x.Id);
-            e.Property(x => x.ValorAnterior).HasMaxLength(32).IsRequired();
-            e.Property(x => x.ValorNovo).HasMaxLength(32).IsRequired();
+            e.Property(x => x.ValorAnterior).HasPrecision(18, 2).IsRequired();
+            e.Property(x => x.ValorNovo).HasPrecision(18, 2).IsRequired();
             e.Property(x => x.DataAlteracaoUtc).IsRequired();
 
             e.HasIndex(x => new { x.ClienteId, x.DataAlteracaoUtc })
@@ -123,6 +129,41 @@ public sealed class ScheduledPurchaseDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.ContaMasterId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EventosIR>(e =>
+        {
+            e.ToTable("eventos_ir");
+            e.Property(x => x.ValorBase).HasPrecision(18, 2);
+            e.Property(x => x.ValorIR).HasPrecision(18, 2);
+
+            e.HasOne(x => x.Cliente)
+                .WithMany()
+                .HasForeignKey(x => x.ClienteId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Rebalanceamentos>(e =>
+        {
+            e.ToTable("rebalanceamentos");
+            e.Property(x => x.TickerVendido).HasMaxLength(10).IsRequired();
+            e.Property(x => x.TickerComprado).HasMaxLength(10).IsRequired();
+            e.Property(x => x.ValorVenda).HasPrecision(18, 2);
+
+            e.HasOne(x => x.Cliente)
+                .WithMany()
+                .HasForeignKey(x => x.ClienteId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MotorExecucao>(e =>
+        {
+            e.ToTable("motor_execucoes");
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Erro).HasMaxLength(2000);
+            e.HasIndex(x => x.DataReferencia)
+                .IsUnique()
+                .HasDatabaseName("ux_motor_execucoes_datareferencia");
         });
     }
 }

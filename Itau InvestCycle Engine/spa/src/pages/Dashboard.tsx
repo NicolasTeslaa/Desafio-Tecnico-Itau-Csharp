@@ -3,6 +3,7 @@ import { pingScheduled, pingMarketData } from "@/lib/api-client";
 import { getIngestoes, getCompras } from "@/lib/local-history";
 import { CheckCircle2, XCircle, Loader2, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { fmtDateBR } from "@/lib/dateUtil";
 
 const STEPS = [
   { label: "Ingerir Cotações (COTAHIST)", to: "/cotacoes", done: false },
@@ -104,7 +105,7 @@ export default function Dashboard() {
             <div className="space-y-2 text-xs">
               {compras.slice(0, 5).map((r, i) => (
                 <div key={i} className="flex justify-between">
-                  <span className="font-mono">{r.dataReferencia}</span>
+                  <span className="font-mono">{fmtDateBR(r.dataReferencia)}</span>
                   <span className="text-muted-foreground">{r.totalClientes} clientes</span>
                 </div>
               ))}

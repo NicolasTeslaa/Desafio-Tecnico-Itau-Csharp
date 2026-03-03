@@ -4,7 +4,7 @@ namespace ScheduledPurchaseEngineService.Interfaces
 {
     public interface IFinanceEventsPublisher
     {
-        Task PublishIrDedoDuroAsync(EventosIR evt, CancellationToken ct = default);
-        Task PublishIrVendaAsync(EventosIR evt, CancellationToken ct = default); // for rebalance later
+        Task PublishIrDedoDuroAsync(EventosIR evt, string cpf, string ticker, CancellationToken ct = default);
+        Task PublishIrVendaAsync(EventosIR evt, string cpf, string ticker, CancellationToken ct = default); // for rebalance later
     }
 }

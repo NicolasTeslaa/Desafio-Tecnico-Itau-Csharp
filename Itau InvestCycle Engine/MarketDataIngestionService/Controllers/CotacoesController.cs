@@ -1,6 +1,5 @@
 using Itau.InvestCycleEngine.Contracts.Common;
 using MarketDataIngestionService.Interfaces;
-using MarketDataIngestionService.Parser;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MarketDataIngestionService.Controllers;
@@ -15,12 +14,14 @@ public sealed class IngestFileRequest
 public sealed class CotacoesController : ControllerBase
 {
     private readonly ICotacoesService _service;
-    private readonly CotahistParser _parser;
+    private readonly IIngestJobService _ingestJobService;
+    private readonly ILogger<CotacoesController> _logger;
 
-    public CotacoesController(ICotacoesService service, CotahistParser parser)
+    public CotacoesController(ICotacoesService service, IIngestJobService ingestJobService, ILogger<CotacoesController> logger)
     {
         _service = service;
-        _parser = parser;
+        _ingestJobService = ingestJobService;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -58,12 +59,49 @@ public sealed class CotacoesController : ControllerBase
             return BadRequest("File is empty.");
 
         var file = request.File;
+        var uploadsDir = Path.Combine(AppContext.BaseDirectory, "uploads");
+        Directory.CreateDirectory(uploadsDir);
 
-        await using var stream = file.OpenReadStream();
-        var records = _parser.ParseStream(stream);
+        var jobFileName = $"{Guid.NewGuid():N}_{Sanitize(file.FileName)}";
+        var filePath = Path.Combine(uploadsDir, jobFileName);
 
-        var saved = await _service.SaveFromCotahistAsync(records, ct);
+        await using (var stream = file.OpenReadStream())
+        await using (var target = System.IO.File.Create(filePath))
+        {
+            await stream.CopyToAsync(target, ct);
+        }
 
-        return Ok(new { file = file.FileName, saved });
+        var response = await _ingestJobService.EnqueueAsync(filePath, file.FileName, ct);
+        _logger.LogInformation("Novo job de ingestao enfileirado: {JobId} para arquivo {File}", response.JobId, response.File);
+
+        return Accepted(response);
+    }
+
+    [HttpGet("ingest/{jobId:guid}")]
+    [ProducesResponseType(typeof(IngestJobStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetIngestStatus(Guid jobId, CancellationToken ct)
+    {
+        var job = await _ingestJobService.GetAsync(jobId, ct);
+        if (job is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(job);
+    }
+
+    [HttpGet("ingest/overview")]
+    [ProducesResponseType(typeof(IngestOverviewResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetIngestOverview(CancellationToken ct)
+    {
+        var overview = await _ingestJobService.GetOverviewAsync(ct);
+        return Ok(overview);
+    }
+
+    private static string Sanitize(string fileName)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        return new string(fileName.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
     }
 }

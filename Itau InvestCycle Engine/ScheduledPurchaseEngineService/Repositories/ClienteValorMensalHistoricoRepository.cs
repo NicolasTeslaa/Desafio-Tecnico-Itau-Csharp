@@ -1,7 +1,6 @@
 ﻿using ClassLibrary.Domain.Entities.Clientes;
 using Microsoft.EntityFrameworkCore;
 using ScheduledPurchaseEngineService.Interfaces;
-using System.Globalization;
 
 namespace ScheduledPurchaseEngineService.Repositories;
 
@@ -19,8 +18,8 @@ public sealed class ClienteValorMensalHistoricoRepository : IClienteValorMensalH
         await _repo.AddAsync(new ClienteValorMensalHistorico
         {
             ClienteId = (int)clienteId,
-            ValorAnterior = valorAnterior.ToString("0.00", CultureInfo.InvariantCulture),
-            ValorNovo = valorNovo.ToString("0.00", CultureInfo.InvariantCulture),
+            ValorAnterior = Math.Round(valorAnterior, 2),
+            ValorNovo = Math.Round(valorNovo, 2),
             DataAlteracaoUtc = changedAtUtc.UtcDateTime,
         }, ct);
     }
@@ -35,21 +34,6 @@ public sealed class ClienteValorMensalHistoricoRepository : IClienteValorMensalH
             .Select(x => x.ValorNovo)
             .FirstOrDefaultAsync(ct);
 
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return parsed;
-        }
-
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.GetCultureInfo("pt-BR"), out parsed))
-        {
-            return parsed;
-        }
-
-        return null;
+        return value;
     }
 }

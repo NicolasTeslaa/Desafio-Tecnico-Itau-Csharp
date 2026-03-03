@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, History, Eye } from "lucide-react";
+import { fmtDateBR } from "@/lib/dateUtil";
 
 export default function CestaPage() {
   const [tab, setTab] = useState<"atual" | "historico" | "cadastrar">("atual");
@@ -60,7 +61,7 @@ function CestaAtual() {
   return (
     <div className="metric-card">
       <h2 className="font-semibold mb-1">{cesta.nome}</h2>
-      {cesta.dataCriacao && <p className="text-xs text-muted-foreground mb-4">Criada em: {cesta.dataCriacao}</p>}
+      {cesta.dataCriacao && <p className="text-xs text-muted-foreground mb-4">Criada em: {fmtDateBR(cesta.dataCriacao)}</p>}
       <table className="data-table">
         <thead><tr><th>Ticker</th><th>Percentual</th><th>Cotação Atual</th></tr></thead>
         <tbody>
@@ -87,37 +88,6 @@ function CestaHistorico() {
       .catch((err) => { toast.error(err.message); })
       .finally(() => setLoading(false));
   }, []);
-
-  function fmtDateBR(value?: string) {
-    if (!value) return "—";
-
-    // Aceita: "2025-12-30", "2025-12-30T00:00:00", "2025-12-30T00:00:00Z"
-    const isoDateOnly = value.length >= 10 ? value.slice(0, 10) : value;
-
-    // Força interpretação como UTC pra não “voltar 1 dia” por timezone
-    const d = new Date(`${isoDateOnly}T00:00:00Z`);
-    if (Number.isNaN(d.getTime())) return value;
-
-    return d.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  }
-
-  function fmtDateTimeBR(value?: string) {
-    if (!value) return "—";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return value;
-
-    return d.toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   if (cestas.length === 0) return <div className="metric-card text-center text-muted-foreground py-8">Nenhuma cesta no histórico.</div>;

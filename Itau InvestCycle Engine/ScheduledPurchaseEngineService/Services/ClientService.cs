@@ -7,7 +7,6 @@ using ClassLibrary.Domain.Entities.CompraDistribuicao;
 using Itau.InvestCycleEngine.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using ScheduledPurchaseEngineService.Interfaces;
-using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace ScheduledPurchaseEngineService.Services;
@@ -68,7 +67,7 @@ public sealed class ClientService : IClentService
                 Nome = (request.Nome ?? string.Empty).Trim(),
                 CPF = cpf,
                 Email = (request.Email ?? string.Empty).Trim(),
-                ValorMensal = request.ValorMensal.ToString("0.00", CultureInfo.InvariantCulture),
+                ValorMensal = Math.Round(request.ValorMensal, 2),
                 Ativo = true,
                 DataAdesao = now,
             };
@@ -129,7 +128,7 @@ public sealed class ClientService : IClentService
                 Nome: cliente.Nome,
                 Cpf: cliente.CPF,
                 Email: cliente.Email,
-                ValorMensal: ParseDecimal(cliente.ValorMensal),
+                ValorMensal: cliente.ValorMensal,
                 Ativo: cliente.Ativo,
                 DataAdesao: cliente.DataAdesao,
                 ContaGrafica: new ContaGraficaResponse(
@@ -222,14 +221,14 @@ public sealed class ClientService : IClentService
                 return Result<AlterarValorMensalResponse, ApiError>.Failure(new ApiError("Cliente nao encontrado.", "CLIENTE_NAO_ENCONTRADO"));
             }
 
-            var anterior = ParseDecimal(cliente.ValorMensal);
-            cliente.ValorMensal = request.NovoValorMensal.ToString("0.00", CultureInfo.InvariantCulture);
+            var anterior = cliente.ValorMensal;
+            cliente.ValorMensal = Math.Round(request.NovoValorMensal, 2);
 
             await _clientesRepository.UpdateAsync(cliente, ct);
             await _valorMensalHistoricoRepository.AddChangeAsync(
                 cliente.Id,
                 anterior,
-                request.NovoValorMensal,
+                cliente.ValorMensal,
                 DateTimeOffset.UtcNow,
                 ct);
             await _uow.CommitAsync(ct);
@@ -237,7 +236,7 @@ public sealed class ClientService : IClentService
             return Result<AlterarValorMensalResponse, ApiError>.Success(new AlterarValorMensalResponse(
                 ClienteId: cliente.Id,
                 ValorMensalAnterior: anterior,
-                ValorMensalNovo: request.NovoValorMensal,
+                ValorMensalNovo: cliente.ValorMensal,
                 DataAlteracao: DateTime.UtcNow,
                 Mensagem: "Valor mensal atualizado. O novo valor sera considerado a partir da proxima data de compra."));
         }
@@ -428,7 +427,7 @@ public sealed class ClientService : IClentService
                 if (dataExecucao < DateOnly.FromDateTime(cliente.DataAdesao.Date) || dataExecucao > hoje) continue;
 
                 var valorMensalNaData = await _valorMensalHistoricoRepository.GetValueForRunAsync(cliente.Id, dataExecucao, ct)
-                    ?? ParseDecimal(cliente.ValorMensal);
+                    ?? cliente.ValorMensal;
 
                 var valorParcela = Math.Round(valorMensalNaData / 3m, 2);
                 historico.Add(new HistoricoAporteResponse(dataExecucao, valorParcela, $"{i + 1}/3"));
@@ -482,21 +481,6 @@ public sealed class ClientService : IClentService
         }
 
         return date;
-    }
-
-    private static decimal ParseDecimal(string? value)
-    {
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return parsed;
-        }
-
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.GetCultureInfo("pt-BR"), out parsed))
-        {
-            return parsed;
-        }
-
-        return 0m;
     }
 
     private static string NormalizeCpf(string? cpf)

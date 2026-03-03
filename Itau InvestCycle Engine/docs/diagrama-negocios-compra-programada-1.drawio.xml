@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0" version="29.6.0">
+  <diagram id="compra-programada-negocios" name="Diagrama de Negocios - Compra Programada">
+    <mxGraphModel dx="1379" dy="752" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;" value="&lt;b&gt;Diagrama de Negocios - Sistema de Compra Programada de Acoes&lt;/b&gt;&lt;br&gt;Itau Corretora" vertex="1">
+          <mxGeometry height="50" width="700" x="450" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="actor_cliente" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" value="&lt;b&gt;Cliente&lt;/b&gt;" vertex="1">
+          <mxGeometry height="60" width="40" x="80" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="actor_admin" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;" value="&lt;b&gt;Administrador&lt;/b&gt;&lt;br&gt;(Research)" vertex="1">
+          <mxGeometry height="60" width="40" x="80" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="group_adesao" parent="1" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;rounded=1;fontSize=13;fontStyle=1;collapsible=0;" value="&lt;b&gt;1. Adesao e Gestao do Cliente&lt;/b&gt;" vertex="1">
+          <mxGeometry height="300" width="340" x="200" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="adesao" parent="group_adesao" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="Aderir ao Produto&lt;br&gt;&lt;i&gt;(informa valor mensal)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="50" width="140" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="criar_conta" parent="group_adesao" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="Criar Conta Grafica&lt;br&gt;(Filhote)" vertex="1">
+          <mxGeometry height="50" width="135" x="185" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="criar_custodia" parent="group_adesao" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="Criar Custodia&lt;br&gt;Filhote" vertex="1">
+          <mxGeometry height="50" width="135" x="185" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="alterar_valor" parent="group_adesao" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="Alterar Valor&lt;br&gt;Mensal" vertex="1">
+          <mxGeometry height="50" width="140" x="20" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="sair_produto" parent="group_adesao" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="Sair do Produto&lt;br&gt;&lt;i&gt;(mantem posicao)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="50" width="140" x="20" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="consultar_carteira" parent="group_adesao" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="Consultar Carteira&lt;br&gt;&lt;i&gt;(Saldo, P/L,&lt;br&gt;Rentabilidade)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="60" width="135" x="185" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="e_adesao_conta" edge="1" parent="group_adesao" source="adesao" style="edgeStyle=orthogonalEdgeStyle;" target="criar_conta">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_conta_custodia" edge="1" parent="group_adesao" source="criar_conta" style="edgeStyle=orthogonalEdgeStyle;" target="criar_custodia">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cliente_adesao" edge="1" parent="1" source="actor_cliente" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;strokeWidth=2;" target="group_adesao">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="group_admin" parent="1" style="swimlane;startSize=30;fillColor=#fff2cc;strokeColor=#d6b656;rounded=1;fontSize=13;fontStyle=1;collapsible=0;" value="&lt;b&gt;2. Painel Administrativo&lt;/b&gt;" vertex="1">
+          <mxGeometry height="200" width="340" x="200" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="cadastrar_cesta" parent="group_admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="Cadastrar / Alterar&lt;br&gt;Cesta Top Five&lt;br&gt;&lt;i&gt;(5 acoes + %)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="60" width="140" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="ver_cesta" parent="group_admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="Visualizar Cesta&lt;br&gt;Atual" vertex="1">
+          <mxGeometry height="50" width="135" x="185" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="historico_cesta" parent="group_admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="Historico de&lt;br&gt;Cestas" vertex="1">
+          <mxGeometry height="50" width="135" x="185" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="trigger_rebalance" parent="group_admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;fontStyle=1;" value="Dispara&lt;br&gt;Rebalanceamento" vertex="1">
+          <mxGeometry height="45" width="140" x="20" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="e_admin_painel" edge="1" parent="1" source="actor_admin" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d6b656;strokeWidth=2;" target="group_admin">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="group_b3" parent="1" style="swimlane;startSize=30;fillColor=#e1d5e7;strokeColor=#9673a6;rounded=1;fontSize=13;fontStyle=1;collapsible=0;" value="&lt;b&gt;3. Cotacoes B3&lt;/b&gt;" vertex="1">
+          <mxGeometry height="120" width="340" x="200" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="arquivo_cotahist" parent="group_b3" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=0.27;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="Arquivo COTAHIST&lt;br&gt;&lt;i&gt;(pasta cotacoes/)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="65" width="130" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="cotacao_fechamento" parent="group_b3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="Cotacao de&lt;br&gt;Fechamento&lt;br&gt;&lt;i&gt;(ultimo pregao)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="60" width="135" x="185" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cotahist_cotacao" edge="1" parent="group_b3" source="arquivo_cotahist" style="edgeStyle=orthogonalEdgeStyle;" target="cotacao_fechamento">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="group_motor" parent="1" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;rounded=1;fontSize=13;fontStyle=1;collapsible=0;" value="&lt;b&gt;4. Motor de Compra Programada (Dias 5, 15 e 25)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="470" width="440" x="620" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="agrupar" parent="group_motor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="1. Agrupar Pedidos&lt;br&gt;&lt;i&gt;(1/3 valor mensal&lt;br&gt;de cada cliente)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="60" width="160" x="140" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="calcular_compra" parent="group_motor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="2. Calcular Compra&lt;br&gt;Consolidada&lt;br&gt;&lt;i&gt;(% cesta x cotacao)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="60" width="160" x="140" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="verificar_saldo" parent="group_motor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="3. Verificar Saldo&lt;br&gt;Custodia Master&lt;br&gt;&lt;i&gt;(descontar residuos)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="60" width="160" x="140" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="executar_compra" parent="group_motor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" value="4. Executar Compra&lt;br&gt;na Conta Master&lt;br&gt;&lt;i&gt;(lote padrao +&lt;br&gt;fracionario)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="65" width="160" x="140" y="265" as="geometry" />
+        </mxCell>
+        <mxCell id="distribuir" parent="group_motor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="5. Distribuir Ativos&lt;br&gt;para Custodias&lt;br&gt;Filhotes&lt;br&gt;&lt;i&gt;(proporcional ao aporte)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="70" width="160" x="140" y="345" as="geometry" />
+        </mxCell>
+        <mxCell id="residuo" parent="group_motor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;dashed=1;" value="6. Residuos&lt;br&gt;ficam na&lt;br&gt;Custodia Master" vertex="1">
+          <mxGeometry height="55" width="110" x="15" y="350" as="geometry" />
+        </mxCell>
+        <mxCell id="e_m1" edge="1" parent="group_motor" source="agrupar" style="edgeStyle=orthogonalEdgeStyle;" target="calcular_compra">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_m2" edge="1" parent="group_motor" source="calcular_compra" style="edgeStyle=orthogonalEdgeStyle;" target="verificar_saldo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_m3" edge="1" parent="group_motor" source="verificar_saldo" style="edgeStyle=orthogonalEdgeStyle;" target="executar_compra">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_m4" edge="1" parent="group_motor" source="executar_compra" style="edgeStyle=orthogonalEdgeStyle;" target="distribuir">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_m5" edge="1" parent="group_motor" source="distribuir" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" target="residuo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cotacao_motor" edge="1" parent="1" source="cotacao_fechamento" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9673a6;strokeWidth=1;dashed=1;fontSize=10;" target="group_motor" value="cotacao fechamento">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="573" y="530" />
+              <mxPoint x="573" y="600" />
+              <mxPoint x="840" y="600" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_cesta_motor" edge="1" parent="1" source="cadastrar_cesta" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d6b656;strokeWidth=1;dashed=1;fontSize=10;" target="calcular_compra" value="% da cesta">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="570" y="680" />
+              <mxPoint x="570" y="255" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="group_rebalance" parent="1" style="swimlane;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;rounded=1;fontSize=13;fontStyle=1;collapsible=0;" value="&lt;b&gt;5. Rebalanceamento&lt;/b&gt;" vertex="1">
+          <mxGeometry height="200" width="440" x="620" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="rebal_mudanca" parent="group_rebalance" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" value="A) Mudanca na&lt;br&gt;Recomendacao&lt;br&gt;&lt;i&gt;(vender ativos antigos,&lt;br&gt;comprar novos)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="70" width="180" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="rebal_desvio" parent="group_rebalance" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" value="B) Desvio de&lt;br&gt;Proporcao&lt;br&gt;&lt;i&gt;(vender sobre-alocados,&lt;br&gt;comprar sub-alocados)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="70" width="180" x="240" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="verificar_ir_venda" parent="group_rebalance" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" value="Verificar IR:&lt;br&gt;Vendas &gt; R$20.000/mes?&lt;br&gt;&lt;i&gt;Se sim: 20% sobre lucro&lt;/i&gt;" vertex="1">
+          <mxGeometry height="65" width="220" x="110" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="e_r1" edge="1" parent="group_rebalance" source="rebal_mudanca" style="edgeStyle=orthogonalEdgeStyle;" target="verificar_ir_venda">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_r2" edge="1" parent="group_rebalance" source="rebal_desvio" style="edgeStyle=orthogonalEdgeStyle;" target="verificar_ir_venda">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_trigger_rebal" edge="1" parent="1" source="trigger_rebalance" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2;dashed=1;fontSize=10;" target="group_rebalance" value="dispara">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="290" y="790" />
+              <mxPoint x="590" y="790" />
+              <mxPoint x="590" y="740" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="group_kafka" parent="1" style="swimlane;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;rounded=1;fontSize=13;fontStyle=1;collapsible=0;fontColor=#333333;" value="&lt;b&gt;6. Mensageria e Fiscal&lt;/b&gt;" vertex="1">
+          <mxGeometry height="340" width="300" x="1130" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="calc_ir_dedo" parent="group_kafka" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontColor=#333333;" value="Calcular IR&lt;br&gt;Dedo-Duro&lt;br&gt;&lt;i&gt;(0,005% sobre&lt;br&gt;valor operacao)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="65" width="160" x="70" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="kafka_topic" parent="group_kafka" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#FF8C00;strokeColor=#CC7000;fontSize=12;fontColor=#ffffff;" value="&lt;b&gt;Topico Kafka&lt;/b&gt;&lt;br&gt;&lt;i&gt;ir-dedo-duro&lt;/i&gt;" vertex="1">
+          <mxGeometry height="65" width="130" x="85" y="135" as="geometry" />
+        </mxCell>
+        <mxCell id="consumidor" parent="group_kafka" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;fontColor=#333333;dashed=1;" value="Consumidor&lt;br&gt;&lt;i&gt;(Receita Federal)&lt;/i&gt;" vertex="1">
+          <mxGeometry height="60" width="180" x="60" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="e_k1" edge="1" parent="group_kafka" source="calc_ir_dedo" style="edgeStyle=orthogonalEdgeStyle;" target="kafka_topic">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_k2" edge="1" parent="group_kafka" source="kafka_topic" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" target="consumidor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_dist_ir" edge="1" parent="1" source="distribuir" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;strokeWidth=2;fontSize=10;" target="calc_ir_dedo" value="cada distribuicao">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1090" y="500" />
+              <mxPoint x="1090" y="187" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rebal_kafka" edge="1" parent="1" source="verificar_ir_venda" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2;dashed=1;fontSize=10;" target="kafka_topic" value="IR vendas">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1100" y="797" />
+              <mxPoint x="1100" y="310" />
+              <mxPoint x="1280" y="310" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="group_db" parent="1" style="swimlane;startSize=30;fillColor=#e6d0de;strokeColor=#996185;rounded=1;fontSize=13;fontStyle=1;collapsible=0;" value="&lt;b&gt;7. Persistencia (MySQL)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="330" width="300" x="1130" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_clientes" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Clientes" vertex="1">
+          <mxGeometry height="25" width="120" x="15" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_contas" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Contas Graficas" vertex="1">
+          <mxGeometry height="25" width="120" x="160" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_custodia" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Custodias" vertex="1">
+          <mxGeometry height="25" width="120" x="15" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_cesta" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Cestas Top Five" vertex="1">
+          <mxGeometry height="25" width="120" x="160" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_ordens" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Ordens de Compra" vertex="1">
+          <mxGeometry height="25" width="120" x="15" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_distribuicoes" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Distribuicoes" vertex="1">
+          <mxGeometry height="25" width="120" x="160" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_preco_medio" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Preco Medio" vertex="1">
+          <mxGeometry height="25" width="120" x="15" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_cotacoes" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Cotacoes" vertex="1">
+          <mxGeometry height="25" width="120" x="160" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_rebalanceamento" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Rebalanceamentos" vertex="1">
+          <mxGeometry height="25" width="120" x="15" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_ir" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="IR / Fiscal" vertex="1">
+          <mxGeometry height="25" width="120" x="160" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="tb_conta_master" parent="group_db" style="shape=table;startSize=25;container=0;collapsible=0;childLayout=tableLayout;fixedRows=0;rowLines=0;fontStyle=1;align=center;resizeLast=0;fillColor=#e6d0de;strokeColor=#996185;fontSize=11;html=1;" value="Conta Master" vertex="1">
+          <mxGeometry height="25" width="130" x="85" y="245" as="geometry" />
+        </mxCell>
+        <mxCell id="legenda_title" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;" value="&lt;b&gt;Legenda&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="80" x="40" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" value="" vertex="1">
+          <mxGeometry height="15" width="20" x="40" y="935" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1t" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="Fluxo do Cliente" vertex="1">
+          <mxGeometry height="25" width="110" x="65" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" value="" vertex="1">
+          <mxGeometry height="15" width="20" x="40" y="960" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2t" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="Painel Administrativo" vertex="1">
+          <mxGeometry height="25" width="140" x="65" y="955" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" value="" vertex="1">
+          <mxGeometry height="15" width="20" x="40" y="985" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3t" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="Motor de Compra Programada" vertex="1">
+          <mxGeometry height="25" width="190" x="65" y="980" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" value="" vertex="1">
+          <mxGeometry height="15" width="20" x="40" y="1010" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4t" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="Rebalanceamento" vertex="1">
+          <mxGeometry height="25" width="120" x="65" y="1005" as="geometry" />
+        </mxCell>
+        <mxCell id="leg5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" value="" vertex="1">
+          <mxGeometry height="15" width="20" x="40" y="1035" as="geometry" />
+        </mxCell>
+        <mxCell id="leg5t" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="Cotacoes B3 (COTAHIST)" vertex="1">
+          <mxGeometry height="25" width="150" x="65" y="1030" as="geometry" />
+        </mxCell>
+        <mxCell id="leg6" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=5;fillColor=#FF8C00;strokeColor=#CC7000;fontSize=10;" value="" vertex="1">
+          <mxGeometry height="20" width="20" x="40" y="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="leg6t" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="Topico Kafka (Mensageria)" vertex="1">
+          <mxGeometry height="25" width="170" x="65" y="1057" as="geometry" />
+        </mxCell>
+        <mxCell id="leg7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=10;" value="" vertex="1">
+          <mxGeometry height="15" width="20" x="40" y="1090" as="geometry" />
+        </mxCell>
+        <mxCell id="leg7t" parent="1" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;" value="Persistencia (MySQL)" vertex="1">
+          <mxGeometry height="25" width="140" x="65" y="1085" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

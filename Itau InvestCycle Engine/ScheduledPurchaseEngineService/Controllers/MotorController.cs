@@ -84,5 +84,17 @@ public sealed class MotorController : ControllerBase
         {
             return BadRequest(new ApiError("Cesta ativa sem itens configurados.", "QUANTIDADE_ATIVOS_INVALIDA"));
         }
+        catch (InvalidOperationException ex) when (ex.Message == "DATA_EXECUCAO_INVALIDA")
+        {
+            return BadRequest(new ApiError("Data de execucao invalida. O motor so pode rodar nos dias 5, 15 ou 25 (ou proximo dia util).", "DATA_EXECUCAO_INVALIDA"));
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "COMPRA_JA_EXECUTADA")
+        {
+            return StatusCode(StatusCodes.Status409Conflict, new ApiError("Compra ja foi executada para esta data.", "COMPRA_JA_EXECUTADA"));
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "KAFKA_INDISPONIVEL")
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new ApiError("Erro ao publicar no topico Kafka.", "KAFKA_INDISPONIVEL"));
+        }
     }
 }

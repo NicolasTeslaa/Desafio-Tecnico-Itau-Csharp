@@ -60,3 +60,11 @@ public sealed record ContaMasterCustodiaResponse(
     ContaMasterInfoResponse ContaMaster,
     IReadOnlyList<CustodiaMasterItemResponse> Custodia,
     decimal ValorTotalResiduo);
+
+public sealed record RebalanceamentoDesvioRequest(decimal ThresholdPercentual);
+
+public sealed record RebalanceamentoDesvioResponse(
+    int TotalClientesAvaliados,
+    int TotalClientesRebalanceados,
+    decimal ThresholdPercentual,
+    string Mensagem);

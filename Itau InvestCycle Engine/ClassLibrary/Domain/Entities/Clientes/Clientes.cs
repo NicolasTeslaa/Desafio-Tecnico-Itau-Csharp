@@ -11,7 +11,7 @@ public class Clientes
     public string CPF { get; set; }
     [MaxLength(200)]
     public string Email { get; set; }
-    public string ValorMensal { get; set; }
+    public decimal ValorMensal { get; set; }
     public bool Ativo { get; set; } = true;
     public DateTime DataAdesao { get; set; }
 }

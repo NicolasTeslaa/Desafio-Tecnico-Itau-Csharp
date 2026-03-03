@@ -17,6 +17,9 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<ICotacoesService, CotacoesService>();
 builder.Services.AddScoped<CotahistParser>();
+builder.Services.AddSingleton<IngestJobBackgroundService>();
+builder.Services.AddSingleton<IIngestJobService>(sp => sp.GetRequiredService<IngestJobBackgroundService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<IngestJobBackgroundService>());
 
 // CORS mais flexível para desenvolvimento
 builder.Services.AddCors(options =>

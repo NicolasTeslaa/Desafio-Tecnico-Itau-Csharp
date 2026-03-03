@@ -18,7 +18,16 @@ public sealed class AdminController : ControllerBase
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CadastrarOuAlterarCesta([FromBody] CadastrarOuAlterarCestaRequest request, CancellationToken ct)
     {
-        var result = await _service.CadastrarOuAlterarCestaAsync(request, ct);
+        Result<CadastrarOuAlterarCestaResponse, ApiError> result;
+        try
+        {
+            result = await _service.CadastrarOuAlterarCestaAsync(request, ct);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "KAFKA_INDISPONIVEL")
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new ApiError("Erro ao publicar no topico Kafka.", "KAFKA_INDISPONIVEL"));
+        }
 
         if (!result.IsSuccess)
             return ToErrorResponse(result.Err!);
@@ -53,6 +62,29 @@ public sealed class AdminController : ControllerBase
     public async Task<IActionResult> ConsultarCustodiaMaster(CancellationToken ct)
     {
         var result = await _service.ConsultarCustodiaMasterAsync(ct);
+
+        if (!result.IsSuccess)
+            return ToErrorResponse(result.Err!);
+
+        return Ok(result.Ok!);
+    }
+
+    [HttpPost("rebalancear/desvio")]
+    [ProducesResponseType(typeof(RebalanceamentoDesvioResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RebalancearPorDesvio([FromBody] RebalanceamentoDesvioRequest request, CancellationToken ct)
+    {
+        Result<RebalanceamentoDesvioResponse, ApiError> result;
+        try
+        {
+            result = await _service.RebalancearPorDesvioAsync(request, ct);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "KAFKA_INDISPONIVEL")
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new ApiError("Erro ao publicar no topico Kafka.", "KAFKA_INDISPONIVEL"));
+        }
 
         if (!result.IsSuccess)
             return ToErrorResponse(result.Err!);

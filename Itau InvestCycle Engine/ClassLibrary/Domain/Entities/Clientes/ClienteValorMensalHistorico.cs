@@ -7,11 +7,9 @@ public class ClienteValorMensalHistorico
     public long Id { get; set; }
     public int ClienteId { get; set; }
 
-    [MaxLength(32)]
-    public string ValorAnterior { get; set; } = string.Empty;
+    public decimal ValorAnterior { get; set; }
 
-    [MaxLength(32)]
-    public string ValorNovo { get; set; } = string.Empty;
+    public decimal ValorNovo { get; set; }
 
     public DateTime DataAlteracaoUtc { get; set; }
 }

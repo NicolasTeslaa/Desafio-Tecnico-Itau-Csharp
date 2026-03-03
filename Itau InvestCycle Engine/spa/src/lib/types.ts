@@ -10,12 +10,12 @@ export interface PagedResponse<T> {
   page: number;
   pageSize: number;
   totalItems: number;
-  totalPages: number;
+  totalPages?: number;
 }
 
 // Market Data types
 export interface Cotacao {
-  id: string;
+  id: number;
   ticker: string;
   dataPregao: string;
   precoAbertura: number;
@@ -29,6 +29,30 @@ export interface Cotacao {
 export interface IngestResponse {
   file: string;
   saved: number;
+}
+
+export interface IngestStartResponse {
+  jobId: string;
+  file: string;
+  status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+  createdAtUtc: string;
+}
+
+export interface IngestJobStatusResponse {
+  jobId: string;
+  file: string;
+  status: "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+  createdAtUtc: string;
+  startedAtUtc?: string | null;
+  finishedAtUtc?: string | null;
+  saved: number;
+  error?: string | null;
+}
+
+export interface IngestOverviewResponse {
+  hasProcessing: boolean;
+  processingCount: number;
+  lastJob?: IngestJobStatusResponse | null;
 }
 
 // Cesta types

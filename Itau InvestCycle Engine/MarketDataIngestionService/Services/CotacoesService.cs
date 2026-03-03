@@ -1,4 +1,4 @@
-using ClassLibrary.Contracts.DTOs;
+ï»¿using ClassLibrary.Contracts.DTOs;
 using ClassLibrary.Domain.Entities;
 using Itau.InvestCycleEngine.Contracts.Common;
 using MarketDataIngestionService.Interfaces;
@@ -8,6 +8,8 @@ namespace MarketDataIngestionService.Services;
 
 public sealed class CotacoesService : ICotacoesService
 {
+    private const int BatchSize = 5000;
+
     private readonly IUnitOfWork _uow;
     private readonly ILogger<CotacoesService> _logger;
 
@@ -19,9 +21,12 @@ public sealed class CotacoesService : ICotacoesService
 
     public async Task<int> SaveFromCotahistAsync(IEnumerable<CotahistPriceRecord> records, CancellationToken ct)
     {
-        try
+        var totalSaved = 0;
+        var batch = new List<Cotacoes>(BatchSize);
+
+        foreach (var r in records)
         {
-            var list = records.Select(r => new Cotacoes
+            batch.Add(new Cotacoes
             {
                 DataPregao = r.TradeDate.ToDateTime(TimeOnly.MinValue).Date,
                 Ticker = r.Symbol.Trim().ToUpperInvariant(),
@@ -29,86 +34,111 @@ public sealed class CotacoesService : ICotacoesService
                 PrecoFechamento = r.Close,
                 PrecoMaximo = r.High,
                 PrecoMinimo = r.Low,
-            }).ToList();
+            });
 
-            await UpsertBatchAsync(list, ct);
-            return list.Count;
+            if (batch.Count < BatchSize) continue;
+
+            await UpsertBatchAsync(batch, ct);
+            totalSaved += batch.Count;
+            batch.Clear();
         }
-        catch (Exception ex)
+
+        if (batch.Count > 0)
         {
-            _logger.LogError(ex, "Erro ao salvar cotacoes a partir de registros cotahist.");
-            throw;
+            await UpsertBatchAsync(batch, ct);
+            totalSaved += batch.Count;
         }
+
+        return totalSaved;
+    }
+
+    public async Task<int> SaveAsync(IEnumerable<CotacaoIngestDto> dtos, CancellationToken ct)
+    {
+        var totalSaved = 0;
+        var batch = new List<Cotacoes>(BatchSize);
+
+        foreach (var d in dtos)
+        {
+            batch.Add(new Cotacoes
+            {
+                DataPregao = d.DataPregao.Date,
+                Ticker = d.Ticker.Trim().ToUpperInvariant(),
+                PrecoAbertura = d.PrecoAbertura,
+                PrecoFechamento = d.PrecoFechamento,
+                PrecoMaximo = d.PrecoMaximo,
+                PrecoMinimo = d.PrecoMinimo,
+            });
+
+            if (batch.Count < BatchSize) continue;
+
+            await UpsertBatchAsync(batch, ct);
+            totalSaved += batch.Count;
+            batch.Clear();
+        }
+
+        if (batch.Count > 0)
+        {
+            await UpsertBatchAsync(batch, ct);
+            totalSaved += batch.Count;
+        }
+
+        return totalSaved;
     }
 
     public async Task<CotacaoIngestDto?> GetByIdAsync(int id, CancellationToken ct)
     {
-        try
-        {
-            return await _uow.Repository<Cotacoes>()
-           .Query()
-           .AsNoTracking()
-           .Where(x => x.Id == id)
-           .Select(x => new CotacaoIngestDto(
-               x.DataPregao,
-               x.Ticker,
-               x.PrecoAbertura,
-               x.PrecoFechamento,
-               x.PrecoMaximo,
-               x.PrecoMinimo))
-           .FirstOrDefaultAsync(ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Erro ao obter cotacao por ID.");
-            throw;
-        }
+        return await _uow.Repository<Cotacoes>()
+            .Query()
+            .AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new CotacaoIngestDto(
+                x.Id,
+                x.DataPregao,
+                x.Ticker,
+                x.PrecoAbertura,
+                x.PrecoFechamento,
+                x.PrecoMaximo,
+                x.PrecoMinimo))
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<PagedResponse<CotacaoIngestDto>> ListAsync(PagedRequest request, string? ticker, DateTime? dataPregao, CancellationToken ct)
     {
-        try
+        var page = request.Page < 1 ? 1 : request.Page;
+        var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
+
+        var query = _uow.Repository<Cotacoes>().Query().AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(ticker))
         {
-            var page = request.Page < 1 ? 1 : request.Page;
-            var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
-
-            var query = _uow.Repository<Cotacoes>().Query().AsNoTracking();
-
-            if (!string.IsNullOrWhiteSpace(ticker))
-            {
-                var tickerNorm = ticker.Trim().ToUpperInvariant();
-                query = query.Where(x => x.Ticker == tickerNorm);
-            }
-
-            if (dataPregao.HasValue)
-            {
-                var date = dataPregao.Value.Date;
-                query = query.Where(x => x.DataPregao == date);
-            }
-
-            var totalItems = await query.CountAsync(ct);
-
-            var items = await query
-                .OrderByDescending(x => x.DataPregao)
-                .ThenBy(x => x.Ticker)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(x => new CotacaoIngestDto(
-                    x.DataPregao,
-                    x.Ticker,
-                    x.PrecoAbertura,
-                    x.PrecoFechamento,
-                    x.PrecoMaximo,
-                    x.PrecoMinimo))
-                .ToListAsync(ct);
-
-            return new PagedResponse<CotacaoIngestDto>(items, page, pageSize, totalItems);
+            var tickerNorm = ticker.Trim().ToUpperInvariant();
+            query = query.Where(x => x.Ticker == tickerNorm);
         }
-        catch (Exception ex)
+
+        if (dataPregao.HasValue)
         {
-            _logger.LogError(ex, "Erro ao listar cotacoes com paginação.");
-            throw;
+            var date = dataPregao.Value.Date;
+            query = query.Where(x => x.DataPregao == date);
         }
+
+        var totalItems = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(x => x.DataPregao)
+            .ThenBy(x => x.Ticker)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new CotacaoIngestDto(
+                x.Id,
+                x.DataPregao,
+                x.Ticker,
+                x.PrecoAbertura,
+                x.PrecoFechamento,
+                x.PrecoMaximo,
+                x.PrecoMinimo))
+            .ToListAsync(ct);
+
+        return new PagedResponse<CotacaoIngestDto>(items, page, pageSize, totalItems);
     }
 
     private async Task UpsertBatchAsync(IEnumerable<Cotacoes> items, CancellationToken ct)

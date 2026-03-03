@@ -13,11 +13,13 @@ namespace ScheduledPurchaseEngineService.Services;
 public sealed class AdminService : IAdminService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IRebalanceService _rebalanceService;
     private readonly ILogger<AdminService> _logger;
 
-    public AdminService(IUnitOfWork uow, ILogger<AdminService> logger)
+    public AdminService(IUnitOfWork uow, IRebalanceService rebalanceService, ILogger<AdminService> logger)
     {
         _uow = uow;
+        _rebalanceService = rebalanceService;
         _logger = logger;
     }
 
@@ -112,6 +114,12 @@ public sealed class AdminService : IAdminService
 
             await _uow.CommitAsync(ct);
 
+            var rebalanceamentoDisparado = cestaAnterior is not null;
+            if (rebalanceamentoDisparado)
+            {
+                await _rebalanceService.RebalanceByBasketChangeAsync(cestaAnterior!.Id, novaCesta.Id, ct);
+            }
+
             var tickersAnteriores = cestaAnteriorItens
                 .Select(x => x.Ticker.Trim().ToUpperInvariant())
                 .ToHashSet();
@@ -124,7 +132,6 @@ public sealed class AdminService : IAdminService
             var ativosAdicionados = tickersNovos.Except(tickersAnteriores).OrderBy(x => x).ToList();
 
             var totalClientesAtivos = await clientesRepo.Query().CountAsync(x => x.Ativo, ct);
-            var rebalanceamentoDisparado = cestaAnterior is not null;
 
             var mensagem = rebalanceamentoDisparado
                 ? $"Cesta atualizada. Rebalanceamento disparado para {totalClientesAtivos} clientes ativos."
@@ -297,5 +304,32 @@ public sealed class AdminService : IAdminService
             Custodia: custodiaResponse,
             ValorTotalResiduo: Math.Round(custodiaResponse.Sum(x => x.ValorAtual), 2)));
     }
-}
 
+    public async Task<Result<RebalanceamentoDesvioResponse, ApiError>> RebalancearPorDesvioAsync(RebalanceamentoDesvioRequest request, CancellationToken ct)
+    {
+        if (request.ThresholdPercentual <= 0m || request.ThresholdPercentual > 100m)
+        {
+            return Result<RebalanceamentoDesvioResponse, ApiError>.Failure(
+                new ApiError("Threshold percentual deve estar entre 0 e 100.", "THRESHOLD_INVALIDO"));
+        }
+
+        var cestaAtiva = await _uow.Repository<CestasRecomendacao>()
+            .Query()
+            .AsNoTracking()
+            .AnyAsync(x => x.Ativa, ct);
+
+        if (!cestaAtiva)
+        {
+            return Result<RebalanceamentoDesvioResponse, ApiError>.Failure(
+                new ApiError("Nenhuma cesta ativa encontrada.", "CESTA_NAO_ENCONTRADA"));
+        }
+
+        var (evaluated, rebalanced) = await _rebalanceService.RebalanceByDriftAsync(request.ThresholdPercentual, ct);
+
+        return Result<RebalanceamentoDesvioResponse, ApiError>.Success(new RebalanceamentoDesvioResponse(
+            TotalClientesAvaliados: evaluated,
+            TotalClientesRebalanceados: rebalanced,
+            ThresholdPercentual: request.ThresholdPercentual,
+            Mensagem: $"Rebalanceamento por desvio executado. Clientes rebalanceados: {rebalanced}/{evaluated}."));
+    }
+}

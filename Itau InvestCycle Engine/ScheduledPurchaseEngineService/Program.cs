@@ -3,6 +3,7 @@ using ScheduledPurchaseEngineService.Data;
 using ScheduledPurchaseEngineService.Interfaces;
 using ScheduledPurchaseEngineService.Repositories;
 using ScheduledPurchaseEngineService.Services;
+using ScheduledPurchaseEngineService.Settings;
 using System.Threading;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +23,11 @@ builder.Services.AddScoped<IClienteValorMensalHistoricoRepository, ClienteValorM
 builder.Services.AddScoped<IClentService, ClientService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IScheduledPurchaseEngine, ScheduledPurchaseEngine>();
+builder.Services.AddScoped<ITradingCalendar, TradingCalendar>();
+builder.Services.AddSingleton<IFinanceEventsPublisher, KafkaFinanceEventsPublisher>();
+builder.Services.AddScoped<IRebalanceService, RebalanceService>();
+builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
+builder.Services.AddHostedService<ScheduledPurchaseHostedService>();
 
 // CORS mais flexível para desenvolvimento (permite localhost/127.0.0.1 em qualquer porta)
 builder.Services.AddCors(options =>

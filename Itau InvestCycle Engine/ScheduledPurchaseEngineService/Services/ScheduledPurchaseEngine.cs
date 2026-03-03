@@ -3,21 +3,30 @@ using ClassLibrary.Domain.Entities;
 using ClassLibrary.Domain.Entities.Cestas;
 using ClassLibrary.Domain.Entities.Clientes;
 using ClassLibrary.Domain.Entities.CompraDistribuicao;
+using ClassLibrary.Domain.Entities.RebalanceamentoIR;
+using Itau.InvestCycleEngine.Domain.Entities;
 using Itau.InvestCycleEngine.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using ScheduledPurchaseEngineService.Interfaces;
-using System.Globalization;
 
 namespace ScheduledPurchaseEngineService.Services;
 
 public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
 {
     private readonly IUnitOfWork _uow;
+    private readonly ITradingCalendar _tradingCalendar;
+    private readonly IFinanceEventsPublisher _publisher;
     private readonly ILogger<ScheduledPurchaseEngine> _logger;
 
-    public ScheduledPurchaseEngine(IUnitOfWork uow, ILogger<ScheduledPurchaseEngine> logger)
+    public ScheduledPurchaseEngine(
+        IUnitOfWork uow,
+        ITradingCalendar tradingCalendar,
+        IFinanceEventsPublisher publisher,
+        ILogger<ScheduledPurchaseEngine> logger)
     {
         _uow = uow;
+        _tradingCalendar = tradingCalendar;
+        _publisher = publisher;
         _logger = logger;
     }
 
@@ -31,6 +40,15 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         var custodiasRepo = _uow.Repository<Custodias>();
         var ordensRepo = _uow.Repository<OrdensCompra>();
         var distribuicoesRepo = _uow.Repository<Distribuicoes>();
+        var eventosIrRepo = _uow.Repository<EventosIR>();
+        var execucoesRepo = _uow.Repository<MotorExecucao>();
+
+        if (!_tradingCalendar.IsPurchaseDate(referenceDate))
+        {
+            throw new InvalidOperationException("DATA_EXECUCAO_INVALIDA");
+        }
+
+        var execucao = await StartExecutionAsync(execucoesRepo, referenceDate, ct);
 
         var clientesAtivos = await clientesRepo.Query()
             .Where(x => x.Ativo)
@@ -40,13 +58,14 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
             .Select(c => new
             {
                 Cliente = c,
-                Aporte = Math.Round(ParseDecimal(c.ValorMensal) / 3m, 2)
+                Aporte = Math.Round(c.ValorMensal / 3m, 2)
             })
             .Where(x => x.Aporte > 0m)
             .ToList();
 
         if (aportes.Count == 0)
         {
+            await MarkExecutionSuccessAsync(execucoesRepo, execucao, ct);
             return new ScheduledPurchaseResult(
                 DateTimeOffset.UtcNow,
                 referenceDate,
@@ -113,7 +132,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         var orders = new List<OrderSummary>();
         var distributions = new List<ClientDistributionSummary>();
         var residuals = new List<ResidualSummary>();
-        var irEventsPublished = 0;
+        var irEvents = new List<PendingIrEvent>();
 
         var distMap = aportes.ToDictionary(
             x => x.Cliente.Id,
@@ -225,7 +244,20 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
                         Data = DateTime.UtcNow,
                     }, ct);
 
-                    irEventsPublished++;
+                    var valorOperacao = Math.Round(qtyCliente * quote, 2);
+                    var valorIr = Math.Round(valorOperacao * 0.00005m, 2);
+                    var evt = new EventosIR
+                    {
+                        ClienteId = aporte.Cliente.Id,
+                        Tipo = TipoIR.DEDO_DURO,
+                        ValorBase = valorOperacao,
+                        ValorIR = valorIr,
+                        PublicadoKafka = false,
+                        DataEvento = DateTime.UtcNow
+                    };
+
+                    await eventosIrRepo.AddAsync(evt, ct);
+                    irEvents.Add(new PendingIrEvent(evt, aporte.Cliente.CPF, ticker));
                 }
 
                 var saldoMasterFinal = qtyDisponivel - qtyDistribuidaTotal;
@@ -274,6 +306,9 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
 
             await _uow.CommitAsync(ct);
 
+            var irEventsPublished = await PublishAndMarkIrEventsAsync(irEvents, ct);
+            await MarkExecutionSuccessAsync(execucoesRepo, execucao, ct);
+
             foreach (var aporte in aportes)
             {
                 distributions.Add(new ClientDistributionSummary(
@@ -297,9 +332,120 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         {
             _logger.LogError(ex, "Erro ao executar motor de compra para {ReferenceDate}", referenceDate);
             await _uow.RollbackAsync(ct);
+            await MarkExecutionFailureAsync(execucoesRepo, execucao, ex.Message, ct);
             throw;
         }
     }
+
+    private async Task<MotorExecucao> StartExecutionAsync(IRepository<MotorExecucao> repo, DateOnly referenceDate, CancellationToken ct)
+    {
+        var dataRef = referenceDate.ToDateTime(TimeOnly.MinValue).Date;
+        var now = DateTime.UtcNow;
+
+        var existing = await repo.Query().FirstOrDefaultAsync(x => x.DataReferencia == dataRef, ct);
+        if (existing is not null)
+        {
+            if (existing.Status is "SUCCESS" or "PENDING")
+            {
+                throw new InvalidOperationException("COMPRA_JA_EXECUTADA");
+            }
+
+            await _uow.BeginAsync(ct);
+            existing.Status = "PENDING";
+            existing.DataInicioUtc = now;
+            existing.DataFimUtc = null;
+            existing.Erro = null;
+            repo.Update(existing);
+            await _uow.CommitAsync(ct);
+            return existing;
+        }
+
+        var novo = new MotorExecucao
+        {
+            DataReferencia = dataRef,
+            Status = "PENDING",
+            DataInicioUtc = now
+        };
+
+        try
+        {
+            await _uow.BeginAsync(ct);
+            await repo.AddAsync(novo, ct);
+            await _uow.CommitAsync(ct);
+            return novo;
+        }
+        catch (DbUpdateException)
+        {
+            await _uow.RollbackAsync(ct);
+            throw new InvalidOperationException("COMPRA_JA_EXECUTADA");
+        }
+    }
+
+    private async Task MarkExecutionSuccessAsync(IRepository<MotorExecucao> repo, MotorExecucao execucao, CancellationToken ct)
+    {
+        await _uow.BeginAsync(ct);
+        execucao.Status = "SUCCESS";
+        execucao.DataFimUtc = DateTime.UtcNow;
+        execucao.Erro = null;
+        repo.Update(execucao);
+        await _uow.CommitAsync(ct);
+    }
+
+    private async Task MarkExecutionFailureAsync(IRepository<MotorExecucao> repo, MotorExecucao execucao, string error, CancellationToken ct)
+    {
+        try
+        {
+            await _uow.BeginAsync(ct);
+            execucao.Status = "FAILED";
+            execucao.DataFimUtc = DateTime.UtcNow;
+            execucao.Erro = error.Length > 1900 ? error[..1900] : error;
+            repo.Update(execucao);
+            await _uow.CommitAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falha ao marcar execucao do motor como FAILED para {ReferenceDate}", execucao.DataReferencia);
+        }
+    }
+
+    private async Task<int> PublishAndMarkIrEventsAsync(IReadOnlyList<PendingIrEvent> events, CancellationToken ct)
+    {
+        if (events.Count == 0) return 0;
+
+        var eventosIrRepo = _uow.Repository<EventosIR>();
+        var published = 0;
+
+        foreach (var pending in events)
+        {
+            var evt = pending.Event;
+            try
+            {
+                if (evt.Tipo == TipoIR.DEDO_DURO)
+                {
+                    await _publisher.PublishIrDedoDuroAsync(evt, pending.Cpf, pending.Ticker, ct);
+                }
+                else
+                {
+                    await _publisher.PublishIrVendaAsync(evt, pending.Cpf, pending.Ticker, ct);
+                }
+
+                await _uow.BeginAsync(ct);
+                evt.PublicadoKafka = true;
+                eventosIrRepo.Update(evt);
+                await _uow.CommitAsync(ct);
+                published++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao publicar evento IR {EventId} para cliente {ClientId}.", evt.Id, evt.ClienteId);
+                throw new InvalidOperationException("KAFKA_INDISPONIVEL");
+            }
+        }
+
+        return published;
+    }
+
+    private sealed record PendingIrEvent(EventosIR Event, string Cpf, string Ticker);
 
     private async Task<ContasGraficas> EnsureMasterAccountAsync(
         IRepository<Clientes> clientesRepo,
@@ -320,7 +466,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
                 Nome = "Conta Master",
                 CPF = "99999999999",
                 Email = "master@local",
-                ValorMensal = "0",
+                ValorMensal = 0m,
                 Ativo = false,
                 DataAdesao = DateTime.UtcNow,
             };
@@ -383,18 +529,4 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         return map;
     }
 
-    private static decimal ParseDecimal(string? value)
-    {
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
-        {
-            return parsed;
-        }
-
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.GetCultureInfo("pt-BR"), out parsed))
-        {
-            return parsed;
-        }
-
-        return 0m;
-    }
 }

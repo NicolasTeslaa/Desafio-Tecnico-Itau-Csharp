@@ -9,5 +9,5 @@ public interface IAdminService
     Task<Result<CestaAtualResponse, ApiError>> ConsultarCestaAtualAsync(CancellationToken ct);
     Task<HistoricoCestasResponse> HistoricoCestasAsync(CancellationToken ct);
     Task<Result<ContaMasterCustodiaResponse, ApiError>> ConsultarCustodiaMasterAsync(CancellationToken ct);
+    Task<Result<RebalanceamentoDesvioResponse, ApiError>> RebalancearPorDesvioAsync(RebalanceamentoDesvioRequest request, CancellationToken ct);
 }
-
