@@ -30,3 +30,11 @@ public sealed record ExecutarCompraResponse(
     IReadOnlyList<ResiduoCustodiaMasterResponse> ResiduosCustMaster,
     int EventosIrPublicados,
     string Mensagem);
+
+public sealed record MotorHistoricoItemResponse(
+    DateTime DataReferencia,
+    int TotalClientes,
+    decimal TotalConsolidado,
+    DateTime DataHoraUtc);
+
+public sealed record MotorHistoricoResponse(IReadOnlyList<MotorHistoricoItemResponse> Compras);

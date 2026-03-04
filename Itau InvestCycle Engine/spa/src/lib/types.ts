@@ -55,6 +55,16 @@ export interface IngestOverviewResponse {
   lastJob?: IngestJobStatusResponse | null;
 }
 
+export interface IngestHistoryItem {
+  file: string;
+  saved: number;
+  dataHoraUtc: string;
+}
+
+export interface IngestHistoryResponse {
+  ingestoes: IngestHistoryItem[];
+}
+
 // Cesta types
 export interface CestaItem {
   ticker: string;
@@ -102,6 +112,21 @@ export interface Cliente {
     tipo: string;
     dataCriacao: string;
   };
+}
+
+export interface ClienteListaItem {
+  clienteId: number;
+  nome: string;
+  cpf: string;
+  email: string;
+  valorMensal: number;
+  ativo: boolean;
+  dataAdesao: string;
+  contaGrafica?: string | null;
+}
+
+export interface ListarClientesResponse {
+  clientes: ClienteListaItem[];
 }
 
 export interface AlterarValorMensalRequest {
@@ -200,4 +225,15 @@ export interface ExecutarCompraResponse {
   distribuicoes: DistribuicaoCliente[];
   residuosCustMaster: ResiduoCustMaster[];
   eventosIrPublicados: number;
+}
+
+export interface MotorHistoricoItem {
+  dataReferencia: string;
+  totalClientes: number;
+  totalConsolidado: number;
+  dataHoraUtc: string;
+}
+
+export interface MotorHistoricoResponse {
+  compras: MotorHistoricoItem[];
 }

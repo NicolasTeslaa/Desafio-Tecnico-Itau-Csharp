@@ -1,7 +1,9 @@
 ﻿using ClassLibrary.Contracts.DTOs;
 using ClassLibrary.Contracts.DTOs.Motor;
+using Itau.InvestCycleEngine.Domain.Entities;
 using Itau.InvestCycleEngine.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ScheduledPurchaseEngineService.Interfaces;
 
 namespace ScheduledPurchaseEngineService.Controllers;
@@ -11,8 +13,15 @@ namespace ScheduledPurchaseEngineService.Controllers;
 public sealed class MotorController : ControllerBase
 {
     private readonly IScheduledPurchaseEngine _engine;
+    private readonly IRepository<MotorExecucaoHistorico> _historicoRepo;
 
-    public MotorController(IScheduledPurchaseEngine engine) => _engine = engine;
+    public MotorController(
+        IScheduledPurchaseEngine engine,
+        IRepository<MotorExecucaoHistorico> historicoRepo)
+    {
+        _engine = engine;
+        _historicoRepo = historicoRepo;
+    }
 
     [HttpPost("executar-compra")]
     [ProducesResponseType(typeof(ExecutarCompraResponse), StatusCodes.Status200OK)]
@@ -96,5 +105,25 @@ public sealed class MotorController : ControllerBase
         {
             return StatusCode(StatusCodes.Status500InternalServerError, new ApiError("Erro ao publicar no topico Kafka.", "KAFKA_INDISPONIVEL"));
         }
+    }
+
+    [HttpGet("historico")]
+    [ProducesResponseType(typeof(MotorHistoricoResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetHistorico([FromQuery] int take = 5, CancellationToken ct = default)
+    {
+        var safeTake = Math.Clamp(take, 1, 50);
+
+        var items = await _historicoRepo.Query()
+            .AsNoTracking()
+            .OrderByDescending(x => x.DataHoraUtc)
+            .Take(safeTake)
+            .Select(x => new MotorHistoricoItemResponse(
+                x.DataReferencia,
+                x.TotalClientes,
+                x.TotalConsolidado,
+                x.DataHoraUtc))
+            .ToListAsync(ct);
+
+        return Ok(new MotorHistoricoResponse(items));
     }
 }

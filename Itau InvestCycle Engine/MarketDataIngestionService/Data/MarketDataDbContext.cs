@@ -14,7 +14,9 @@ public sealed class MarketDataDbContext : DbContext
     {
         modelBuilder.Entity<Cotacoes>(e =>
         {
-            e.ToTable("cotacoes");
+            // Tabela compartilhada com o ScheduledPurchaseEngineService.
+            // Este contexto apenas lê/escreve dados nela, mas não é o dono da migração.
+            e.ToTable("cotacoes", t => t.ExcludeFromMigrations());
             e.Property(x => x.Ticker).HasMaxLength(12).IsRequired();
             e.Property(x => x.PrecoAbertura).HasPrecision(18, 2);
             e.Property(x => x.PrecoFechamento).HasPrecision(18, 2);

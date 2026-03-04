@@ -14,7 +14,6 @@ namespace ScheduledPurchaseEngineService.Services;
 public sealed class ClientService : IClentService
 {
     private static readonly Regex NonDigitRegex = new(@"\D", RegexOptions.Compiled);
-    private static readonly Regex CpfRegex = new(@"^(?!^(\d)\1{10}$)\d{11}$", RegexOptions.Compiled);
 
     private readonly IUnitOfWork _uow;
     private readonly IClientesRepository _clientesRepository;
@@ -31,6 +30,53 @@ public sealed class ClientService : IClentService
         _clientesRepository = clientesRepository;
         _valorMensalHistoricoRepository = valorMensalHistoricoRepository;
         _logger = logger;
+    }
+
+    public async Task<Result<ListarClientesResponse, ApiError>> ListarClientesAsync(bool? ativo, CancellationToken ct)
+    {
+        try
+        {
+            var clientesRepo = _uow.Repository<Clientes>();
+            var contasRepo = _uow.Repository<ContasGraficas>();
+
+            var query = clientesRepo.Query().AsNoTracking();
+            if (ativo.HasValue)
+            {
+                query = query.Where(x => x.Ativo == ativo.Value);
+            }
+
+            var clientes = await query
+                .OrderByDescending(x => x.Ativo)
+                .ThenBy(x => x.Nome)
+                .ToListAsync(ct);
+
+            var clienteIds = clientes.Select(x => x.Id).ToList();
+            var contas = await contasRepo.Query()
+                .AsNoTracking()
+                .Where(x => clienteIds.Contains(x.ClienteId) && x.Tipo == TipoConta.Filhote)
+                .ToListAsync(ct);
+
+            var contaByCliente = contas.ToDictionary(x => x.ClienteId, x => x.NumeroConta);
+
+            var itens = clientes
+                .Select(x => new ClienteListaItemResponse(
+                    ClienteId: x.Id,
+                    Nome: x.Nome,
+                    Cpf: x.CPF,
+                    Email: x.Email,
+                    ValorMensal: x.ValorMensal,
+                    Ativo: x.Ativo,
+                    DataAdesao: x.DataAdesao,
+                    ContaGrafica: contaByCliente.TryGetValue(x.Id, out var conta) ? conta : null))
+                .ToList();
+
+            return Result<ListarClientesResponse, ApiError>.Success(new ListarClientesResponse(itens));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao listar clientes.");
+            throw;
+        }
     }
 
     public async Task<Result<AdesaoClienteResponse, ApiError>> AdesaoProdutoAsync(AdesaoClienteRequest request, CancellationToken ct)
@@ -192,6 +238,19 @@ public sealed class ClientService : IClentService
             }
 
             var clientesRepo = _uow.Repository<Clientes>();
+            var historicoValorRepo = _uow.Repository<ClienteValorMensalHistorico>();
+
+            await _uow.BeginAsync(ct);
+
+            var historicoValor = await historicoValorRepo.Query()
+                .Where(x => x.ClienteId == clienteId)
+                .ToListAsync(ct);
+
+            foreach (var item in historicoValor)
+            {
+                historicoValorRepo.Remove(item);
+            }
+
             clientesRepo.Remove(cliente);
             await _uow.CommitAsync(ct);
 
@@ -487,7 +546,41 @@ public sealed class ClientService : IClentService
         => NonDigitRegex.Replace(cpf ?? string.Empty, string.Empty);
 
     private static bool IsCpfValid(string cpf)
-        => CpfRegex.IsMatch(cpf);
+    {
+        if (cpf.Length != 11 || !cpf.All(char.IsDigit))
+        {
+            return false;
+        }
+
+        if (cpf.Distinct().Count() == 1)
+        {
+            return false;
+        }
+
+        var primeiroDigito = CalculateCpfDigit(cpf, 9);
+        if (cpf[9] - '0' != primeiroDigito)
+        {
+            return false;
+        }
+
+        var segundoDigito = CalculateCpfDigit(cpf, 10);
+        return cpf[10] - '0' == segundoDigito;
+    }
+
+    private static int CalculateCpfDigit(string cpf, int length)
+    {
+        var sum = 0;
+        var weight = length + 1;
+
+        for (var i = 0; i < length; i++)
+        {
+            sum += (cpf[i] - '0') * weight;
+            weight--;
+        }
+
+        var mod = sum % 11;
+        return mod < 2 ? 0 : 11 - mod;
+    }
 }
 
 

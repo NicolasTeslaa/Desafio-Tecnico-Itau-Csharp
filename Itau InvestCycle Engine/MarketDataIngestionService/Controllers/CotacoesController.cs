@@ -99,6 +99,14 @@ public sealed class CotacoesController : ControllerBase
         return Ok(overview);
     }
 
+    [HttpGet("ingest/history")]
+    [ProducesResponseType(typeof(IngestHistoryResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetIngestHistory([FromQuery] int take = 5, CancellationToken ct = default)
+    {
+        var history = await _ingestJobService.GetRecentAsync(take, ct);
+        return Ok(history);
+    }
+
     private static string Sanitize(string fileName)
     {
         var invalidChars = Path.GetInvalidFileNameChars();

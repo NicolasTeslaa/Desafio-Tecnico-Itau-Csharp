@@ -53,8 +53,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-ApplyMigrationsWithRetry<ScheduledPurchaseDbContext>(app.Services);
-
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -74,34 +72,3 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-
-static void ApplyMigrationsWithRetry<TContext>(IServiceProvider services) where TContext : DbContext
-{
-    using var scope = services.CreateScope();
-    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseMigration");
-    var db = scope.ServiceProvider.GetRequiredService<TContext>();
-
-    const int maxAttempts = 10;
-    for (var attempt = 1; attempt <= maxAttempts; attempt++)
-    {
-        try
-        {
-            db.Database.Migrate();
-            logger.LogInformation("Migrations applied for {DbContext}.", typeof(TContext).Name);
-            return;
-        }
-        catch (Exception ex) when (attempt < maxAttempts)
-        {
-            logger.LogWarning(
-                ex,
-                "Failed to apply migrations for {DbContext} (attempt {Attempt}/{MaxAttempts}). Retrying in 5 seconds.",
-                typeof(TContext).Name,
-                attempt,
-                maxAttempts);
-
-            Thread.Sleep(TimeSpan.FromSeconds(5));
-        }
-    }
-
-    db.Database.Migrate();
-}

@@ -56,10 +56,13 @@ namespace MarketDataIngestionService.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("cotacoes", (string)null);
+                    b.ToTable("cotacoes", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
                 });
 
-            modelBuilder.Entity("MarketDataIngestionService.Data.Entities.IngestaoJob", b =>
+            modelBuilder.Entity("ClassLibrary.Domain.Entities.IngestaoJob", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()

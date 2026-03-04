@@ -42,6 +42,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         var distribuicoesRepo = _uow.Repository<Distribuicoes>();
         var eventosIrRepo = _uow.Repository<EventosIR>();
         var execucoesRepo = _uow.Repository<MotorExecucao>();
+        var historicoRepo = _uow.Repository<MotorExecucaoHistorico>();
 
         if (!_tradingCalendar.IsPurchaseDate(referenceDate))
         {
@@ -66,6 +67,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         if (aportes.Count == 0)
         {
             await MarkExecutionSuccessAsync(execucoesRepo, execucao, ct);
+            await RecordExecutionHistoryAsync(historicoRepo, referenceDate, 0, 0m, ct);
             return new ScheduledPurchaseResult(
                 DateTimeOffset.UtcNow,
                 referenceDate,
@@ -308,6 +310,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
 
             var irEventsPublished = await PublishAndMarkIrEventsAsync(irEvents, ct);
             await MarkExecutionSuccessAsync(execucoesRepo, execucao, ct);
+            await RecordExecutionHistoryAsync(historicoRepo, referenceDate, aportes.Count, totalConsolidado, ct);
 
             foreach (var aporte in aportes)
             {
@@ -406,6 +409,24 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         {
             _logger.LogWarning(ex, "Falha ao marcar execucao do motor como FAILED para {ReferenceDate}", execucao.DataReferencia);
         }
+    }
+
+    private async Task RecordExecutionHistoryAsync(
+        IRepository<MotorExecucaoHistorico> repo,
+        DateOnly referenceDate,
+        int totalClients,
+        decimal totalConsolidado,
+        CancellationToken ct)
+    {
+        await _uow.BeginAsync(ct);
+        await repo.AddAsync(new MotorExecucaoHistorico
+        {
+            DataReferencia = referenceDate.ToDateTime(TimeOnly.MinValue).Date,
+            TotalClientes = totalClients,
+            TotalConsolidado = Math.Round(totalConsolidado, 2),
+            DataHoraUtc = DateTime.UtcNow
+        }, ct);
+        await _uow.CommitAsync(ct);
     }
 
     private async Task<int> PublishAndMarkIrEventsAsync(IReadOnlyList<PendingIrEvent> events, CancellationToken ct)

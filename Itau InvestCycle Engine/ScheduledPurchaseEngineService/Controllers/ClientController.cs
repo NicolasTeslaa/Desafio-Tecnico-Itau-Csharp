@@ -13,6 +13,17 @@ public sealed class ClientController : ControllerBase
 
     public ClientController(IClentService service) => _service = service;
 
+    [HttpGet]
+    [ProducesResponseType(typeof(ListarClientesResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Listar([FromQuery] bool? ativo = null, CancellationToken ct = default)
+    {
+        var result = await _service.ListarClientesAsync(ativo, ct);
+        if (!result.IsSuccess)
+            return ToErrorResponse(result.Err!);
+
+        return Ok(result.Ok!);
+    }
+
     [HttpPost("adesao")]
     [ProducesResponseType(typeof(AdesaoClienteResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status400BadRequest)]

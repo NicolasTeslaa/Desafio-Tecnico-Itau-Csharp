@@ -97,6 +97,27 @@ public sealed class IngestJobBackgroundService : BackgroundService, IIngestJobSe
             LastJob: lastJob is null ? null : ToDto(lastJob));
     }
 
+    public async Task<IngestHistoryResponse> GetRecentAsync(int take, CancellationToken ct)
+    {
+        var safeTake = Math.Clamp(take, 1, 50);
+
+        using var scope = _scopeFactory.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IUnitOfWork>().Repository<IngestaoJob>();
+
+        var items = await repo.Query()
+            .AsNoTracking()
+            .Where(x => x.Status == "COMPLETED")
+            .OrderByDescending(x => x.FinishedAtUtc ?? x.CreatedAtUtc)
+            .Take(safeTake)
+            .Select(x => new IngestHistoryItemResponse(
+                x.File,
+                x.Saved,
+                x.FinishedAtUtc ?? x.CreatedAtUtc))
+            .ToListAsync(ct);
+
+        return new IngestHistoryResponse(items);
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await foreach (var item in _channel.Reader.ReadAllAsync(stoppingToken))

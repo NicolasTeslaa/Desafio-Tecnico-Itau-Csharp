@@ -26,7 +26,7 @@ public sealed class MarketDataDbContextFactory : IDesignTimeDbContextFactory<Mar
         switch (provider.Trim().ToLowerInvariant())
         {
             case "mysql":
-                optionsBuilder.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
+                optionsBuilder.UseMySql(connectionString, new MySqlServerVersion(ParseMySqlServerVersion(configuration["Database:MySqlServerVersion"])));
                 break;
             default:
                 throw new NotSupportedException($"Database provider '{provider}' is not supported.");
@@ -34,6 +34,11 @@ public sealed class MarketDataDbContextFactory : IDesignTimeDbContextFactory<Mar
 
         return new MarketDataDbContext(optionsBuilder.Options);
     }
+
+    private static Version ParseMySqlServerVersion(string? versionRaw)
+        => Version.TryParse(versionRaw, out var version)
+            ? version
+            : new Version(8, 4, 0);
 }
 
 public static class MarketDataDbContextRegistrationExtensions
@@ -50,7 +55,7 @@ public static class MarketDataDbContextRegistrationExtensions
             case "mysql":
                 services.AddDbContext<MarketDataDbContext>(opt =>
                 {
-                    opt.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
+                    opt.UseMySql(connectionString, new MySqlServerVersion(ParseMySqlServerVersion(configuration["Database:MySqlServerVersion"])));
                 });
                 break;
             default:
@@ -59,4 +64,9 @@ public static class MarketDataDbContextRegistrationExtensions
 
         return services;
     }
+
+    private static Version ParseMySqlServerVersion(string? versionRaw)
+        => Version.TryParse(versionRaw, out var version)
+            ? version
+            : new Version(8, 4, 0);
 }

@@ -90,3 +90,15 @@ public sealed record ConsultarRentabilidadeResponse(
 public sealed record ExcluirClienteResponse(
     int ClienteId,
     string Mensagem);
+
+public sealed record ClienteListaItemResponse(
+    int ClienteId,
+    string Nome,
+    string Cpf,
+    string Email,
+    decimal ValorMensal,
+    bool Ativo,
+    DateTime DataAdesao,
+    string? ContaGrafica);
+
+public sealed record ListarClientesResponse(IReadOnlyList<ClienteListaItemResponse> Clientes);

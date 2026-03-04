@@ -1,7 +1,6 @@
 ﻿import { useState } from "react";
 import { scheduledApi, ApiClientError } from "@/lib/api-client";
 import { friendlyError } from "@/lib/error-dictionary";
-import { addCompra } from "@/lib/local-history";
 import type { ExecutarCompraRequest, ExecutarCompraResponse } from "@/lib/types";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,7 +25,6 @@ export default function MotorPage() {
       const payload: ExecutarCompraRequest = { dataReferencia: dataRef };
       const res = await scheduledApi.post<ExecutarCompraResponse>("/api/motor/executar-compra", payload);
       setResult(res);
-      addCompra({ dataReferencia: dataRef, totalClientes: res.totalClientes, totalConsolidado: res.totalConsolidado });
       toast.success("Compra executada com sucesso!");
     } catch (err) {
       if (err instanceof ApiClientError && err.apiError) {
@@ -140,3 +138,4 @@ export default function MotorPage() {
     </div>
   );
 }
+

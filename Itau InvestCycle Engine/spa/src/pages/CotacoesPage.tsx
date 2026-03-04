@@ -1,7 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { marketDataApi, ApiClientError } from "@/lib/api-client";
 import { friendlyError } from "@/lib/error-dictionary";
-import { addIngestao } from "@/lib/local-history";
 import type { Cotacao, IngestJobStatusResponse, IngestOverviewResponse, IngestStartResponse, PagedResponse } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -18,7 +17,7 @@ import {
   Filter,
   RefreshCcw,
 } from "lucide-react";
-import { fmtDateBR } from "@/lib/dateUtil";
+import { fmtDateBR, fmtDateTimeBR } from "@/lib/dateUtil";
 
 export default function CotacoesPage() {
   const [tab, setTab] = useState<"ingestao" | "consulta">("ingestao");
@@ -157,7 +156,6 @@ function IngestaoTab() {
 
     if (status.status === "COMPLETED") {
       stopPolling();
-      addIngestao({ file: status.file, saved: status.saved });
       toast.success(`Importacao concluida: ${status.saved} registros salvos.`);
     }
 
@@ -757,13 +755,6 @@ function fmt(n?: number) {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function fmtDateTimeBR(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("pt-BR");
-}
-
 function handleApiError(err: unknown) {
   if (err instanceof ApiClientError) {
     const msg = err.apiError ? `${friendlyError(err.apiError.codigo)}` : err.message;
@@ -773,6 +764,8 @@ function handleApiError(err: unknown) {
     toast.error("Erro inesperado.");
   }
 }
+
+
 
 
 

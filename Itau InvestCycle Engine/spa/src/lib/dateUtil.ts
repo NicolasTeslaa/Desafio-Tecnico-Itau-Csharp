@@ -1,16 +1,49 @@
-export function fmtDateBR(value?: string) {
-    if (!value) return "—";
+﻿export const BRAZIL_TIME_ZONE = "America/Sao_Paulo";
 
-    // Aceita: "2025-12-30", "2025-12-30T00:00:00", "2025-12-30T00:00:00Z"
-    const isoDateOnly = value.length >= 10 ? value.slice(0, 10) : value;
+function hasTimeZoneOffset(value: string): boolean {
+  return /(?:Z|[+\-]\d{2}:?\d{2})$/i.test(value);
+}
 
-    // Força interpretação como UTC pra não “voltar 1 dia” por timezone
-    const d = new Date(`${isoDateOnly}T00:00:00Z`);
-    if (Number.isNaN(d.getTime())) return value;
+function normalizeUtcDateTime(value: string): string {
+  if (!value.includes("T")) return value;
+  return hasTimeZoneOffset(value) ? value : `${value}Z`;
+}
 
-    return d.toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-    });
+export function fmtDateBR(value?: string | null): string {
+  if (!value) return "-";
+
+  const datePortion = value.slice(0, 10);
+  const match = datePortion.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const [, year, month, day] = match;
+    return `${day}/${month}/${year}`;
+  }
+
+  const parsed = new Date(normalizeUtcDateTime(value));
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: BRAZIL_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(parsed);
+}
+
+export function fmtDateTimeBR(value?: string | null): string {
+  if (!value) return "-";
+
+  const parsed = new Date(normalizeUtcDateTime(value));
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: BRAZIL_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(parsed);
 }

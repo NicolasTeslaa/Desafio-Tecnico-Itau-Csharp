@@ -24,6 +24,7 @@ public sealed class ScheduledPurchaseDbContext : DbContext
     public DbSet<EventosIR> EventosIR => Set<EventosIR>();
     public DbSet<Rebalanceamentos> Rebalanceamentos => Set<Rebalanceamentos>();
     public DbSet<MotorExecucao> MotorExecucoes => Set<MotorExecucao>();
+    public DbSet<MotorExecucaoHistorico> MotorExecucoesHistorico => Set<MotorExecucaoHistorico>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -164,6 +165,14 @@ public sealed class ScheduledPurchaseDbContext : DbContext
             e.HasIndex(x => x.DataReferencia)
                 .IsUnique()
                 .HasDatabaseName("ux_motor_execucoes_datareferencia");
+        });
+
+        modelBuilder.Entity<MotorExecucaoHistorico>(e =>
+        {
+            e.ToTable("motor_execucoes_historico");
+            e.Property(x => x.TotalConsolidado).HasPrecision(18, 2);
+            e.HasIndex(x => x.DataHoraUtc)
+                .HasDatabaseName("ix_motor_execucoes_historico_datahorautc");
         });
     }
 }
