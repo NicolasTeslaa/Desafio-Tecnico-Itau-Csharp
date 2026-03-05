@@ -141,6 +141,29 @@ public sealed class CotacoesService : ICotacoesService
         return new PagedResponse<CotacaoIngestDto>(items, page, pageSize, totalItems);
     }
 
+    public async Task<IReadOnlyList<string>> ListDistinctTickersAsync(string? query, int limit, CancellationToken ct)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 2000);
+        var normalizedQuery = (query ?? string.Empty).Trim().ToUpperInvariant();
+
+        var tickersQuery = _uow.Repository<Cotacoes>()
+            .Query()
+            .AsNoTracking()
+            .Select(x => x.Ticker.Trim().ToUpper())
+            .Where(x => x != string.Empty)
+            .Distinct();
+
+        if (!string.IsNullOrEmpty(normalizedQuery))
+        {
+            tickersQuery = tickersQuery.Where(x => x.Contains(normalizedQuery));
+        }
+
+        return await tickersQuery
+            .OrderBy(x => x)
+            .Take(safeLimit)
+            .ToListAsync(ct);
+    }
+
     private async Task UpsertBatchAsync(IEnumerable<Cotacoes> items, CancellationToken ct)
     {
         var list = items.ToList();

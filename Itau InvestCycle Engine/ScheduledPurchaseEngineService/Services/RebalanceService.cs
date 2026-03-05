@@ -40,15 +40,26 @@ public sealed class RebalanceService : IRebalanceService
             .Where(x => x.CestaId == newCestaId)
             .ToListAsync(ct);
 
-        var oldTickers = previousItems.Select(x => NormalizeTicker(x.Ticker)).ToHashSet();
-        var newTickers = newItems.Select(x => NormalizeTicker(x.Ticker)).ToHashSet();
-        var tickersRemovidos = oldTickers.Except(newTickers).ToHashSet();
-        var tickersAdicionados = newItems
-            .Where(x => !oldTickers.Contains(NormalizeTicker(x.Ticker)))
-            .Select(x => (Ticker: NormalizeTicker(x.Ticker), x.Percentual))
-            .ToList();
+        var oldPercentByTicker = previousItems
+            .GroupBy(x => NormalizeTicker(x.Ticker))
+            .ToDictionary(g => g.Key, g => g.First().Percentual);
 
-        if (tickersRemovidos.Count == 0 && tickersAdicionados.Count == 0)
+        var newPercentByTicker = newItems
+            .GroupBy(x => NormalizeTicker(x.Ticker))
+            .ToDictionary(g => g.Key, g => g.First().Percentual);
+
+        var oldTickers = oldPercentByTicker.Keys.ToHashSet();
+        var newTickers = newPercentByTicker.Keys.ToHashSet();
+        var tickersRemovidos = oldTickers.Except(newTickers).ToHashSet();
+        var tickersAdicionados = newTickers.Except(oldTickers).ToHashSet();
+        var tickersMantidosComMudancaPercentual = oldTickers
+            .Intersect(newTickers)
+            .Where(t => Math.Abs(oldPercentByTicker[t] - newPercentByTicker[t]) > 0.0001m)
+            .ToHashSet();
+
+        if (tickersRemovidos.Count == 0 &&
+            tickersAdicionados.Count == 0 &&
+            tickersMantidosComMudancaPercentual.Count == 0)
         {
             return 0;
         }
@@ -82,7 +93,7 @@ public sealed class RebalanceService : IRebalanceService
 
                 var custodiasByTicker = custodias.ToDictionary(x => NormalizeTicker(x.Ticker));
                 var tickersCotacao = custodiasByTicker.Keys
-                    .Concat(tickersAdicionados.Select(x => x.Ticker))
+                    .Concat(newPercentByTicker.Keys)
                     .Distinct()
                     .ToList();
 
@@ -94,6 +105,8 @@ public sealed class RebalanceService : IRebalanceService
                     .GroupBy(x => NormalizeTicker(x.Ticker))
                     .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.DataPregao).First().PrecoFechamento);
 
+                var houveMovimentacao = false;
+                decimal caixaDisponivel = 0m;
                 decimal totalVendas = 0m;
                 decimal lucroLiquido = 0m;
 
@@ -110,6 +123,7 @@ public sealed class RebalanceService : IRebalanceService
                     }
 
                     var valorVenda = Math.Round(custodia.Quantidade * quoteVenda, 2);
+                    caixaDisponivel += valorVenda;
                     totalVendas += valorVenda;
                     lucroLiquido += Math.Round((quoteVenda - custodia.PrecoMedio) * custodia.Quantidade, 2);
 
@@ -123,33 +137,136 @@ public sealed class RebalanceService : IRebalanceService
                     }, ct);
 
                     custodiasRepo.Remove(custodia);
+                    custodiasByTicker.Remove(tickerVendido);
+                    houveMovimentacao = true;
                 }
 
-                if (totalVendas > 0m && tickersAdicionados.Count > 0)
+                decimal valorCarteiraPosRemocao = 0m;
+                foreach (var ticker in newPercentByTicker.Keys)
                 {
-                    var totalPercent = tickersAdicionados.Sum(x => x.Percentual);
-                    if (totalPercent > 0m)
+                    if (!custodiasByTicker.TryGetValue(ticker, out var custodiaAtual) || custodiaAtual.Quantidade <= 0)
                     {
-                        foreach (var add in tickersAdicionados)
-                        {
-                            if (!quoteByTicker.TryGetValue(add.Ticker, out var quoteCompra) || quoteCompra <= 0m)
-                            {
-                                continue;
-                            }
+                        continue;
+                    }
 
-                            var valorAlocado = Math.Round(totalVendas * (add.Percentual / totalPercent), 2);
-                            var qtyCompra = (int)Math.Floor(valorAlocado / quoteCompra);
+                    if (!quoteByTicker.TryGetValue(ticker, out var quoteAtual) || quoteAtual <= 0m)
+                    {
+                        continue;
+                    }
+
+                    valorCarteiraPosRemocao += custodiaAtual.Quantidade * quoteAtual;
+                }
+
+                var valorBaseRebalance = valorCarteiraPosRemocao + caixaDisponivel;
+                if (valorBaseRebalance > 0m)
+                {
+                    // Primeiro ajusta excesso (vendas), depois usa o caixa resultante para compras.
+                    foreach (var ticker in newPercentByTicker.Keys)
+                    {
+                        if (!custodiasByTicker.TryGetValue(ticker, out var custodiaAtual) || custodiaAtual.Quantidade <= 0)
+                        {
+                            continue;
+                        }
+
+                        if (!quoteByTicker.TryGetValue(ticker, out var quoteVenda) || quoteVenda <= 0m)
+                        {
+                            continue;
+                        }
+
+                        var valorAtual = custodiaAtual.Quantidade * quoteVenda;
+                        var valorAlvo = valorBaseRebalance * (newPercentByTicker[ticker] / 100m);
+                        var excesso = valorAtual - valorAlvo;
+                        if (excesso <= 0m)
+                        {
+                            continue;
+                        }
+
+                        var qtySell = (int)Math.Floor(excesso / quoteVenda);
+                        qtySell = Math.Min(qtySell, custodiaAtual.Quantidade);
+                        if (qtySell <= 0)
+                        {
+                            continue;
+                        }
+
+                        var valorVenda = Math.Round(qtySell * quoteVenda, 2);
+                        caixaDisponivel += valorVenda;
+                        totalVendas += valorVenda;
+                        lucroLiquido += Math.Round((quoteVenda - custodiaAtual.PrecoMedio) * qtySell, 2);
+
+                        custodiaAtual.Quantidade -= qtySell;
+                        custodiaAtual.DataUltimaAtualizacao = now;
+
+                        if (custodiaAtual.Quantidade <= 0)
+                        {
+                            custodiasRepo.Remove(custodiaAtual);
+                            custodiasByTicker.Remove(ticker);
+                        }
+                        else
+                        {
+                            custodiasRepo.Update(custodiaAtual);
+                        }
+
+                        await rebalsRepo.AddAsync(new Rebalanceamentos
+                        {
+                            ClienteId = cliente.Id,
+                            TickerVendido = ticker,
+                            TickerComprado = "CAIXA",
+                            ValorVenda = valorVenda,
+                            DataRebalanceamento = now
+                        }, ct);
+
+                        houveMovimentacao = true;
+                    }
+
+                    var deficits = new List<(string Ticker, decimal Deficit, decimal Quote)>();
+                    var totalDeficit = 0m;
+
+                    foreach (var ticker in newPercentByTicker.Keys)
+                    {
+                        if (!quoteByTicker.TryGetValue(ticker, out var quoteCompra) || quoteCompra <= 0m)
+                        {
+                            continue;
+                        }
+
+                        var valorAtual = 0m;
+                        if (custodiasByTicker.TryGetValue(ticker, out var custodiaAtual) && custodiaAtual.Quantidade > 0)
+                        {
+                            valorAtual = custodiaAtual.Quantidade * quoteCompra;
+                        }
+
+                        var valorAlvo = valorBaseRebalance * (newPercentByTicker[ticker] / 100m);
+                        var deficit = valorAlvo - valorAtual;
+                        if (deficit <= 0m)
+                        {
+                            continue;
+                        }
+
+                        deficits.Add((ticker, deficit, quoteCompra));
+                        totalDeficit += deficit;
+                    }
+
+                    if (caixaDisponivel > 0m && totalDeficit > 0m)
+                    {
+                        var caixaParaCompras = caixaDisponivel;
+
+                        foreach (var item in deficits)
+                        {
+                            var valorAlocado = Math.Round(caixaParaCompras * (item.Deficit / totalDeficit), 2);
+                            var qtyCompra = (int)Math.Floor(valorAlocado / item.Quote);
                             if (qtyCompra <= 0)
                             {
                                 continue;
                             }
 
-                            if (custodiasByTicker.TryGetValue(add.Ticker, out var custExistente))
+                            var valorCompra = Math.Round(qtyCompra * item.Quote, 2);
+                            caixaDisponivel = Math.Max(0m, caixaDisponivel - valorCompra);
+
+                            if (custodiasByTicker.TryGetValue(item.Ticker, out var custExistente))
                             {
                                 var qtdAnterior = custExistente.Quantidade;
                                 var qtdNova = qtdAnterior + qtyCompra;
                                 custExistente.PrecoMedio = Math.Round(
-                                    ((qtdAnterior * custExistente.PrecoMedio) + (qtyCompra * quoteCompra)) / qtdNova, 6);
+                                    ((qtdAnterior * custExistente.PrecoMedio) + (qtyCompra * item.Quote)) / qtdNova, 6);
                                 custExistente.Quantidade = qtdNova;
                                 custExistente.DataUltimaAtualizacao = now;
                                 custodiasRepo.Update(custExistente);
@@ -159,14 +276,16 @@ public sealed class RebalanceService : IRebalanceService
                                 var nova = new Custodias
                                 {
                                     ContasGraficasId = conta.Id,
-                                    Ticker = add.Ticker,
+                                    Ticker = item.Ticker,
                                     Quantidade = qtyCompra,
-                                    PrecoMedio = quoteCompra,
+                                    PrecoMedio = item.Quote,
                                     DataUltimaAtualizacao = now
                                 };
                                 await custodiasRepo.AddAsync(nova, ct);
-                                custodiasByTicker[add.Ticker] = nova;
+                                custodiasByTicker[item.Ticker] = nova;
                             }
+
+                            houveMovimentacao = true;
                         }
                     }
                 }
@@ -199,7 +318,10 @@ public sealed class RebalanceService : IRebalanceService
                         await eventosRepo.AddAsync(evento, ct);
                         eventosParaPublicar.Add(new PendingIrEvent(evento, cliente.CPF, "REBAL"));
                     }
+                }
 
+                if (houveMovimentacao)
+                {
                     totalClientesProcessados++;
                 }
             }

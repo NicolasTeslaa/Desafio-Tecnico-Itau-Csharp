@@ -1,9 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 using ScheduledPurchaseEngineService.Data;
 using ScheduledPurchaseEngineService.Interfaces;
 using ScheduledPurchaseEngineService.Repositories;
 using ScheduledPurchaseEngineService.Services;
 using ScheduledPurchaseEngineService.Settings;
+using System.Data.Common;
 using System.Threading;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,7 +31,7 @@ builder.Services.AddScoped<IRebalanceService, RebalanceService>();
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.AddHostedService<ScheduledPurchaseHostedService>();
 
-// CORS mais flexível para desenvolvimento (permite localhost/127.0.0.1 em qualquer porta)
+// CORS mais flexivel para desenvolvimento (permite localhost/127.0.0.1 em qualquer porta)
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -53,6 +55,9 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+UseSanitizedExceptionHandling(app);
+await EnsureScheduledPurchaseSchemaAsync(app.Services, app.Logger);
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -72,3 +77,57 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static async Task EnsureScheduledPurchaseSchemaAsync(IServiceProvider services, ILogger logger)
+{
+    const int maxAttempts = 10;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ScheduledPurchaseDbContext>();
+            await db.Database.MigrateAsync();
+            logger.LogInformation("Schema do ScheduledPurchase validado com sucesso.");
+            return;
+        }
+        catch (Exception ex) when (attempt < maxAttempts)
+        {
+            logger.LogWarning(ex, "Falha ao preparar schema do ScheduledPurchase (tentativa {Attempt}/{MaxAttempts}).", attempt, maxAttempts);
+            await Task.Delay(TimeSpan.FromSeconds(2));
+        }
+    }
+
+    throw new InvalidOperationException("Nao foi possivel preparar o schema do ScheduledPurchase apos multiplas tentativas.");
+}
+
+static void UseSanitizedExceptionHandling(WebApplication app)
+{
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            var feature = context.Features.Get<IExceptionHandlerFeature>();
+            var exception = feature?.Error;
+            var traceId = context.TraceIdentifier;
+
+            var isDependencyFailure = exception is DbException or TimeoutException;
+            var statusCode = isDependencyFailure
+                ? StatusCodes.Status503ServiceUnavailable
+                : StatusCodes.Status500InternalServerError;
+            var errorCode = isDependencyFailure ? "DEPENDENCY_UNAVAILABLE" : "INTERNAL_ERROR";
+
+            app.Logger.LogError(exception, "Unhandled exception. TraceId={TraceId}, Path={Path}", traceId, context.Request.Path);
+
+            context.Response.StatusCode = statusCode;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                code = errorCode,
+                message = "Nao foi possivel concluir a requisicao no momento.",
+                traceId
+            });
+        });
+    });
+}

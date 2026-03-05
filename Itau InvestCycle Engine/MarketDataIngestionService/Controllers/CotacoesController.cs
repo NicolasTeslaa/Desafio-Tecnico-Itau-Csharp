@@ -47,6 +47,13 @@ public sealed class CotacoesController : ControllerBase
         return Ok(item);
     }
 
+    [HttpGet("tickers")]
+    public async Task<IActionResult> ListDistinctTickers([FromQuery] string? query = null, [FromQuery] int limit = 500, CancellationToken ct = default)
+    {
+        var tickers = await _service.ListDistinctTickersAsync(query, limit, ct);
+        return Ok(new { tickers });
+    }
+
     [HttpPost("ingest")]
     [Consumes("multipart/form-data")]
     [DisableRequestSizeLimit]

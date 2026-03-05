@@ -85,9 +85,32 @@ export interface HistoricoCestasResponse {
   cestas: Cesta[];
 }
 
+export interface TickersDisponiveisResponse {
+  tickers: string[];
+}
+
 export interface CriarCestaRequest {
   nome: string;
   itens: { ticker: string; percentual: number }[];
+}
+
+export interface AtivoPercentualAlterado {
+  ticker: string;
+  percentualAnterior: number;
+  percentualNovo: number;
+}
+
+export interface CadastrarOuAlterarCestaResponse {
+  cestaId: number;
+  nome: string;
+  ativa: boolean;
+  dataCriacao: string;
+  itens: CestaItem[];
+  rebalanceamentoDisparado: boolean;
+  ativosRemovidos: string[];
+  ativosAdicionados: string[];
+  ativosPercentualAlterado?: AtivoPercentualAlterado[];
+  mensagem: string;
 }
 
 // Cliente types

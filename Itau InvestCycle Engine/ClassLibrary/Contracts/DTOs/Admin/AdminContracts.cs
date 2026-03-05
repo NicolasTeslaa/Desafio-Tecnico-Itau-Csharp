@@ -13,6 +13,11 @@ public sealed record CestaAnteriorDesativadaResponse(
     string Nome,
     DateTime DataDesativacao);
 
+public sealed record AtivoPercentualAlteradoResponse(
+    string Ticker,
+    decimal PercentualAnterior,
+    decimal PercentualNovo);
+
 public sealed record CadastrarOuAlterarCestaResponse(
     int CestaId,
     string Nome,
@@ -23,7 +28,8 @@ public sealed record CadastrarOuAlterarCestaResponse(
     bool RebalanceamentoDisparado,
     IReadOnlyList<string> AtivosRemovidos,
     IReadOnlyList<string> AtivosAdicionados,
-    string Mensagem);
+    string Mensagem,
+    IReadOnlyList<AtivoPercentualAlteradoResponse>? AtivosPercentualAlterado = null);
 
 public sealed record CestaAtualItemResponse(
     string Ticker,
@@ -46,6 +52,8 @@ public sealed record CestaHistoricoItemResponse(
     IReadOnlyList<CestaItemResponse> Itens);
 
 public sealed record HistoricoCestasResponse(IReadOnlyList<CestaHistoricoItemResponse> Cestas);
+
+public sealed record TickersDisponiveisResponse(IReadOnlyList<string> Tickers);
 
 public sealed record ContaMasterInfoResponse(int Id, string NumeroConta, string Tipo);
 

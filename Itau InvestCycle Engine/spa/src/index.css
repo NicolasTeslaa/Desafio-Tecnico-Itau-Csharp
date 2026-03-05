@@ -129,17 +129,25 @@
     @apply w-full text-sm;
   }
   .data-table th {
-    @apply px-4 py-3 text-left font-medium text-muted-foreground bg-muted/50 border-b;
+    @apply px-2 py-2 text-left font-medium text-muted-foreground bg-muted/50 border-b whitespace-nowrap;
   }
   .data-table td {
-    @apply px-4 py-3 border-b border-border/50;
+    @apply px-2 py-2 border-b border-border/50 whitespace-nowrap;
   }
   .data-table tr:hover td {
     @apply bg-muted/30;
   }
+  @media (min-width: 640px) {
+    .data-table th {
+      @apply px-4 py-3;
+    }
+    .data-table td {
+      @apply px-4 py-3;
+    }
+  }
 
   .metric-card {
-    @apply bg-card border rounded-lg p-5;
+    @apply bg-card border rounded-lg p-4 sm:p-5;
   }
   .metric-value {
     @apply text-2xl font-semibold tracking-tight;

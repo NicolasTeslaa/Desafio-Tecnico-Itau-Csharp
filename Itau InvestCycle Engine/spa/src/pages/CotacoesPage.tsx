@@ -70,7 +70,7 @@ function TabButton({
     <button
       onClick={onClick}
       className={[
-        "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors",
+        "inline-flex items-center gap-2 rounded-xl px-3 sm:px-4 py-2 text-sm transition-colors",
         "border bg-card hover:bg-accent hover:text-accent-foreground",
         active
           ? "border-primary/30 bg-primary text-primary-foreground hover:bg-primary"
@@ -465,7 +465,7 @@ function ConsultaTab() {
 
           <div className="hidden lg:block" />
 
-          <Button onClick={() => search(1)} disabled={loading} className="h-10">
+          <Button onClick={() => search(1)} disabled={loading} className="h-10 w-full lg:w-auto">
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
             Buscar
           </Button>
@@ -474,7 +474,7 @@ function ConsultaTab() {
             variant="outline"
             onClick={clearFilters}
             disabled={loading && !data}
-            className="h-10"
+            className="h-10 w-full lg:w-auto"
             title="Limpar filtros"
           >
             <RefreshCcw className="mr-2 h-4 w-4" />
@@ -715,7 +715,7 @@ function DetailModal({
         aria-hidden="true"
       />
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl rounded-2xl border bg-card shadow-lg">
+        <div className="w-full max-w-2xl rounded-2xl border bg-card shadow-lg max-h-[85vh] overflow-hidden">
           <div className="flex items-center justify-between border-b p-4 sm:p-5">
             <div className="text-sm font-semibold">{title}</div>
             <button
@@ -726,7 +726,7 @@ function DetailModal({
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="p-4 sm:p-5">{children}</div>
+          <div className="p-4 sm:p-5 overflow-auto">{children}</div>
         </div>
       </div>
     </div>

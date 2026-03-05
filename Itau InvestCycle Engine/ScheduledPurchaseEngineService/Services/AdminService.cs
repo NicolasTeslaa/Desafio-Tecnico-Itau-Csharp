@@ -25,38 +25,11 @@ public sealed class AdminService : IAdminService
 
     public async Task<Result<CadastrarOuAlterarCestaResponse, ApiError>> CadastrarOuAlterarCestaAsync(CadastrarOuAlterarCestaRequest request, CancellationToken ct)
     {
-        if (request.Itens.Count != 5)
-        {
-            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(new ApiError(
-                $"A cesta deve conter exatamente 5 ativos. Quantidade informada: {request.Itens.Count}.",
-                "QUANTIDADE_ATIVOS_INVALIDA"));
-        }
+        var validacao = await ValidateAndNormalizeItensAsync(request, ct);
+        if (!validacao.IsSuccess)
+            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(validacao.Err!);
 
-        if (request.Itens.Any(x => x.Percentual <= 0m))
-        {
-            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(new ApiError(
-                "Cada percentual da cesta deve ser maior que 0%.",
-                "PERCENTUAIS_INVALIDOS"));
-        }
-
-        var normalizedTickers = request.Itens
-            .Select(x => (x.Ticker ?? string.Empty).Trim().ToUpperInvariant())
-            .ToList();
-
-        if (normalizedTickers.Any(string.IsNullOrWhiteSpace) || normalizedTickers.Distinct().Count() != 5)
-        {
-            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(new ApiError(
-                "A cesta deve conter 5 tickers validos e sem repeticao.",
-                "QUANTIDADE_ATIVOS_INVALIDA"));
-        }
-
-        var somaPercentuais = request.Itens.Sum(x => x.Percentual);
-        if (Math.Abs(somaPercentuais - 100m) > 0.0001m)
-        {
-            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(new ApiError(
-                $"A soma dos percentuais deve ser exatamente 100%. Soma atual: {somaPercentuais}%.",
-                "PERCENTUAIS_INVALIDOS"));
-        }
+        var normalizedItens = validacao.Ok!;
 
         var cestasRepo = _uow.Repository<CestasRecomendacao>();
         var itensCestaRepo = _uow.Repository<ItensCesta>();
@@ -95,11 +68,11 @@ public sealed class AdminService : IAdminService
                 DataDesativacao = null
             };
 
-            var itensNovos = request.Itens
+            var itensNovos = normalizedItens
                 .Select(x => new ItensCesta
                 {
                     Cesta = novaCesta,
-                    Ticker = x.Ticker.Trim().ToUpperInvariant(),
+                    Ticker = x.Ticker,
                     Percentual = x.Percentual
                 })
                 .ToList();
@@ -130,6 +103,21 @@ public sealed class AdminService : IAdminService
 
             var ativosRemovidos = tickersAnteriores.Except(tickersNovos).OrderBy(x => x).ToList();
             var ativosAdicionados = tickersNovos.Except(tickersAnteriores).OrderBy(x => x).ToList();
+            var percentualAnteriorPorTicker = cestaAnteriorItens
+                .GroupBy(x => x.Ticker.Trim().ToUpperInvariant())
+                .ToDictionary(g => g.Key, g => g.First().Percentual);
+            var percentualNovoPorTicker = itensNovos
+                .GroupBy(x => x.Ticker.Trim().ToUpperInvariant())
+                .ToDictionary(g => g.Key, g => g.First().Percentual);
+            var ativosPercentualAlterado = percentualAnteriorPorTicker.Keys
+                .Intersect(percentualNovoPorTicker.Keys)
+                .Select(ticker => new AtivoPercentualAlteradoResponse(
+                    Ticker: ticker,
+                    PercentualAnterior: percentualAnteriorPorTicker[ticker],
+                    PercentualNovo: percentualNovoPorTicker[ticker]))
+                .Where(x => Math.Abs(x.PercentualAnterior - x.PercentualNovo) > 0.0001m)
+                .OrderBy(x => x.Ticker)
+                .ToList();
 
             var totalClientesAtivos = await clientesRepo.Query().CountAsync(x => x.Ativo, ct);
 
@@ -149,11 +137,175 @@ public sealed class AdminService : IAdminService
                 RebalanceamentoDisparado: rebalanceamentoDisparado,
                 AtivosRemovidos: ativosRemovidos,
                 AtivosAdicionados: ativosAdicionados,
-                Mensagem: mensagem));
+                Mensagem: mensagem,
+                AtivosPercentualAlterado: ativosPercentualAlterado));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao cadastrar/alterar cesta.");
+            await _uow.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task<Result<CadastrarOuAlterarCestaResponse, ApiError>> EditarCestaAsync(int cestaId, CadastrarOuAlterarCestaRequest request, CancellationToken ct)
+    {
+        var validacao = await ValidateAndNormalizeItensAsync(request, ct);
+        if (!validacao.IsSuccess)
+            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(validacao.Err!);
+
+        var normalizedItens = validacao.Ok!;
+        var cestasRepo = _uow.Repository<CestasRecomendacao>();
+        var itensCestaRepo = _uow.Repository<ItensCesta>();
+
+        var cesta = await cestasRepo.Query()
+            .FirstOrDefaultAsync(x => x.Id == cestaId, ct);
+
+        if (cesta is null)
+        {
+            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(
+                new ApiError("Cesta nao encontrada.", "CESTA_NAO_ENCONTRADA"));
+        }
+
+        var itensAtuais = await itensCestaRepo.Query()
+            .Where(x => x.CestaId == cestaId)
+            .ToListAsync(ct);
+
+        try
+        {
+            await _uow.BeginAsync(ct);
+
+            foreach (var item in itensAtuais)
+            {
+                itensCestaRepo.Remove(item);
+            }
+
+            cesta.Nome = request.Nome;
+            cestasRepo.Update(cesta);
+
+            var itensNovos = normalizedItens
+                .Select(x => new ItensCesta
+                {
+                    CestaId = cestaId,
+                    Ticker = x.Ticker,
+                    Percentual = x.Percentual
+                })
+                .ToList();
+
+            foreach (var item in itensNovos)
+            {
+                await itensCestaRepo.AddAsync(item, ct);
+            }
+
+            await _uow.CommitAsync(ct);
+
+            var tickersAnteriores = itensAtuais
+                .Select(x => NormalizeTicker(x.Ticker))
+                .ToHashSet();
+
+            var tickersNovos = itensNovos
+                .Select(x => NormalizeTicker(x.Ticker))
+                .ToHashSet();
+
+            var ativosRemovidos = tickersAnteriores.Except(tickersNovos).OrderBy(x => x).ToList();
+            var ativosAdicionados = tickersNovos.Except(tickersAnteriores).OrderBy(x => x).ToList();
+            var percentualAnteriorPorTicker = itensAtuais
+                .GroupBy(x => NormalizeTicker(x.Ticker))
+                .ToDictionary(g => g.Key, g => g.First().Percentual);
+            var percentualNovoPorTicker = itensNovos
+                .GroupBy(x => NormalizeTicker(x.Ticker))
+                .ToDictionary(g => g.Key, g => g.First().Percentual);
+            var ativosPercentualAlterado = percentualAnteriorPorTicker.Keys
+                .Intersect(percentualNovoPorTicker.Keys)
+                .Select(ticker => new AtivoPercentualAlteradoResponse(
+                    Ticker: ticker,
+                    PercentualAnterior: percentualAnteriorPorTicker[ticker],
+                    PercentualNovo: percentualNovoPorTicker[ticker]))
+                .Where(x => Math.Abs(x.PercentualAnterior - x.PercentualNovo) > 0.0001m)
+                .OrderBy(x => x.Ticker)
+                .ToList();
+
+            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Success(new CadastrarOuAlterarCestaResponse(
+                CestaId: cesta.Id,
+                Nome: cesta.Nome,
+                Ativa: cesta.Ativa,
+                DataCriacao: cesta.DataCriacao,
+                Itens: itensNovos.Select(x => new CestaItemResponse(x.Ticker, x.Percentual)).ToList(),
+                CestaAnteriorDesativada: null,
+                RebalanceamentoDisparado: false,
+                AtivosRemovidos: ativosRemovidos,
+                AtivosAdicionados: ativosAdicionados,
+                Mensagem: "Cesta atualizada com sucesso.",
+                AtivosPercentualAlterado: ativosPercentualAlterado));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao editar cesta {CestaId}.", cestaId);
+            await _uow.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task<TickersDisponiveisResponse> ListarTickersDisponiveisAsync(string? query, int limit, CancellationToken ct)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 2000);
+        var normalizedQuery = NormalizeTicker(query);
+
+        var tickersQuery = _uow.Repository<Cotacoes>()
+            .Query()
+            .AsNoTracking()
+            .Select(x => x.Ticker.Trim().ToUpper())
+            .Where(x => x != string.Empty)
+            .Distinct();
+
+        if (!string.IsNullOrEmpty(normalizedQuery))
+        {
+            tickersQuery = tickersQuery.Where(x => x.Contains(normalizedQuery));
+        }
+
+        var filtrados = await tickersQuery
+            .OrderBy(x => x)
+            .Take(safeLimit)
+            .ToListAsync(ct);
+
+        return new TickersDisponiveisResponse(filtrados);
+    }
+
+    public async Task<Result<bool, ApiError>> ExcluirCestaAsync(int cestaId, CancellationToken ct)
+    {
+        var cestasRepo = _uow.Repository<CestasRecomendacao>();
+        var itensCestaRepo = _uow.Repository<ItensCesta>();
+
+        var cesta = await cestasRepo.Query()
+            .FirstOrDefaultAsync(x => x.Id == cestaId, ct);
+
+        if (cesta is null)
+        {
+            return Result<bool, ApiError>.Failure(
+                new ApiError("Cesta nao encontrada.", "CESTA_NAO_ENCONTRADA"));
+        }
+
+        try
+        {
+            await _uow.BeginAsync(ct);
+
+            var itens = await itensCestaRepo.Query()
+                .Where(x => x.CestaId == cestaId)
+                .ToListAsync(ct);
+
+            foreach (var item in itens)
+            {
+                itensCestaRepo.Remove(item);
+            }
+
+            cestasRepo.Remove(cesta);
+            await _uow.CommitAsync(ct);
+
+            return Result<bool, ApiError>.Success(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao excluir cesta {CestaId}.", cestaId);
             await _uow.RollbackAsync(ct);
             throw;
         }
@@ -332,4 +484,76 @@ public sealed class AdminService : IAdminService
             ThresholdPercentual: request.ThresholdPercentual,
             Mensagem: $"Rebalanceamento por desvio executado. Clientes rebalanceados: {rebalanced}/{evaluated}."));
     }
+
+    private async Task<Result<IReadOnlyList<CestaItemRequest>, ApiError>> ValidateAndNormalizeItensAsync(
+        CadastrarOuAlterarCestaRequest request,
+        CancellationToken ct)
+    {
+        if (request.Itens.Count != 5)
+        {
+            return Result<IReadOnlyList<CestaItemRequest>, ApiError>.Failure(new ApiError(
+                $"A cesta deve conter exatamente 5 ativos. Quantidade informada: {request.Itens.Count}.",
+                "QUANTIDADE_ATIVOS_INVALIDA"));
+        }
+
+        if (request.Itens.Any(x => x.Percentual <= 0m))
+        {
+            return Result<IReadOnlyList<CestaItemRequest>, ApiError>.Failure(new ApiError(
+                "Cada percentual da cesta deve ser maior que 0%.",
+                "PERCENTUAIS_INVALIDOS"));
+        }
+
+        var normalizedItens = request.Itens
+            .Select(x => new CestaItemRequest(NormalizeTicker(x.Ticker), x.Percentual))
+            .ToList();
+
+        var normalizedTickers = normalizedItens
+            .Select(x => x.Ticker)
+            .ToList();
+
+        if (normalizedTickers.Any(string.IsNullOrWhiteSpace) || normalizedTickers.Distinct().Count() != 5)
+        {
+            return Result<IReadOnlyList<CestaItemRequest>, ApiError>.Failure(new ApiError(
+                "A cesta deve conter 5 tickers validos e sem repeticao.",
+                "QUANTIDADE_ATIVOS_INVALIDA"));
+        }
+
+        var somaPercentuais = normalizedItens.Sum(x => x.Percentual);
+        if (Math.Abs(somaPercentuais - 100m) > 0.0001m)
+        {
+            return Result<IReadOnlyList<CestaItemRequest>, ApiError>.Failure(new ApiError(
+                $"A soma dos percentuais deve ser exatamente 100%. Soma atual: {somaPercentuais}%.",
+                "PERCENTUAIS_INVALIDOS"));
+        }
+
+        var tickersExistentes = await _uow.Repository<Cotacoes>()
+            .Query()
+            .AsNoTracking()
+            .Where(x => normalizedTickers.Contains(x.Ticker.Trim().ToUpper()))
+            .Select(x => x.Ticker)
+            .Distinct()
+            .ToListAsync(ct);
+
+        var tickersExistentesNormalizados = tickersExistentes
+            .Select(NormalizeTicker)
+            .ToHashSet();
+
+        var tickersInvalidos = normalizedTickers
+            .Where(x => !tickersExistentesNormalizados.Contains(x))
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
+
+        if (tickersInvalidos.Count > 0)
+        {
+            return Result<IReadOnlyList<CestaItemRequest>, ApiError>.Failure(new ApiError(
+                $"Ticker(s) invalido(s): {string.Join(", ", tickersInvalidos)}.",
+                "TICKER_INVALIDO"));
+        }
+
+        return Result<IReadOnlyList<CestaItemRequest>, ApiError>.Success(normalizedItens);
+    }
+
+    private static string NormalizeTicker(string? ticker)
+        => (ticker ?? string.Empty).Trim().ToUpperInvariant();
 }

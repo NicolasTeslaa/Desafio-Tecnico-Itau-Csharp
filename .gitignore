@@ -12,3 +12,4 @@ Itau InvestCycle Engine/cotacoes/COTAHIST_A2025.TXT
 /Itau InvestCycle Engine/MarketDataIngestionService/Migrations
 /Itau InvestCycle Engine/ScheduledPurchaseEngineService/.tmpbuild
 /Itau InvestCycle Engine/MarketDataIngestionService/Migrations
+/Itau InvestCycle Engine/tests/artifacts/bin

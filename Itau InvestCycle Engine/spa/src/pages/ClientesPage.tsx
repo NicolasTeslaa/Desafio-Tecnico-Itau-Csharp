@@ -35,7 +35,7 @@ export default function ClientesPage() {
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState("");
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Clientes</h1>
 
       <div className="flex flex-wrap gap-2">
@@ -47,7 +47,7 @@ export default function ClientesPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm rounded-lg flex items-center gap-2 transition-colors ${tab === t.key
+            className={`px-3 sm:px-4 py-2 text-sm rounded-lg flex items-center gap-2 transition-colors ${tab === t.key
               ? "bg-primary text-primary-foreground"
               : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
@@ -286,7 +286,7 @@ function GerenciarTab({
           </Button>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div className="rounded-lg border p-3 space-y-2">
             <p className="text-xs font-semibold uppercase text-muted-foreground">Cadastro</p>
             <Button
@@ -396,9 +396,9 @@ function GerenciarTab({
       </div>
 
       {carteira && (
-        <div className="metric-card overflow-x-auto">
+        <div className="metric-card">
           <h3 className="font-semibold mb-4">Carteira</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
             <Metric label="Valor investido" value={`R$ ${carteira.resumo.valorTotalInvestido.toFixed(2)}`} />
             <Metric label="Valor atual" value={`R$ ${carteira.resumo.valorAtualCarteira.toFixed(2)}`} />
             <Metric
@@ -412,39 +412,41 @@ function GerenciarTab({
               positive={carteira.resumo.rentabilidadePercentual >= 0}
             />
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Ticker</th>
-                <th>Qtd</th>
-                <th>PM</th>
-                <th>Cotacao atual</th>
-                <th>Valor atual</th>
-                <th>P/L</th>
-                <th>% composicao</th>
-              </tr>
-            </thead>
-            <tbody>
-              {carteira.ativos.map((a: AtivoCarteira, i: number) => (
-                <tr key={i}>
-                  <td className="font-mono font-medium">{a.ticker}</td>
-                  <td>{a.quantidade}</td>
-                  <td>R$ {a.precoMedio.toFixed(2)}</td>
-                  <td>R$ {a.cotacaoAtual.toFixed(2)}</td>
-                  <td>R$ {a.valorAtual.toFixed(2)}</td>
-                  <td className={a.pl >= 0 ? "text-primary" : "text-destructive"}>R$ {a.pl.toFixed(2)}</td>
-                  <td>{a.composicaoCarteira.toFixed(2)}%</td>
+          <div className="overflow-x-auto">
+            <table className="data-table min-w-[760px]">
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Qtd</th>
+                  <th>PM</th>
+                  <th>Cotacao atual</th>
+                  <th>Valor atual</th>
+                  <th>P/L</th>
+                  <th>% composicao</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {carteira.ativos.map((a: AtivoCarteira, i: number) => (
+                  <tr key={i}>
+                    <td className="font-mono font-medium">{a.ticker}</td>
+                    <td>{a.quantidade}</td>
+                    <td>R$ {a.precoMedio.toFixed(2)}</td>
+                    <td>R$ {a.cotacaoAtual.toFixed(2)}</td>
+                    <td>R$ {a.valorAtual.toFixed(2)}</td>
+                    <td className={a.pl >= 0 ? "text-primary" : "text-destructive"}>R$ {a.pl.toFixed(2)}</td>
+                    <td>{a.composicaoCarteira.toFixed(2)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {rentabilidade && (
         <div className="metric-card">
           <h3 className="font-semibold mb-4">Rentabilidade</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
             <Metric
               label="Valor investido"
               value={`R$ ${rentabilidade.rentabilidade.valorTotalInvestido.toFixed(2)}`}
@@ -561,7 +563,7 @@ function ListaClientesTab({ onGerenciar }: { onGerenciar: (clienteId: number) =>
         </Button>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto]">
         <Input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}

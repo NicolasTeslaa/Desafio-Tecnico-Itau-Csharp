@@ -35,6 +35,20 @@ public sealed class AdminController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, result.Ok!);
     }
 
+    [HttpPut("cesta/{cestaId:int}")]
+    [ProducesResponseType(typeof(CadastrarOuAlterarCestaResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> EditarCesta([FromRoute] int cestaId, [FromBody] CadastrarOuAlterarCestaRequest request, CancellationToken ct)
+    {
+        var result = await _service.EditarCestaAsync(cestaId, request, ct);
+
+        if (!result.IsSuccess)
+            return ToErrorResponse(result.Err!);
+
+        return Ok(result.Ok!);
+    }
+
     [HttpGet("cesta/atual")]
     [ProducesResponseType(typeof(CestaAtualResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
@@ -54,6 +68,27 @@ public sealed class AdminController : ControllerBase
     {
         var response = await _service.HistoricoCestasAsync(ct);
         return Ok(response);
+    }
+
+    [HttpGet("cesta/tickers")]
+    [ProducesResponseType(typeof(TickersDisponiveisResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListarTickersDisponiveis([FromQuery] string? query = null, [FromQuery] int limit = 500, CancellationToken ct = default)
+    {
+        var response = await _service.ListarTickersDisponiveisAsync(query, limit, ct);
+        return Ok(response);
+    }
+
+    [HttpDelete("cesta/{cestaId:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ExcluirCesta([FromRoute] int cestaId, CancellationToken ct)
+    {
+        var result = await _service.ExcluirCestaAsync(cestaId, ct);
+
+        if (!result.IsSuccess)
+            return ToErrorResponse(result.Err!);
+
+        return NoContent();
     }
 
     [HttpGet("conta-master/custodia")]

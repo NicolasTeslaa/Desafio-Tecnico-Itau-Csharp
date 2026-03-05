@@ -95,7 +95,7 @@ public sealed class MotorController : ControllerBase
         }
         catch (InvalidOperationException ex) when (ex.Message == "DATA_EXECUCAO_INVALIDA")
         {
-            return BadRequest(new ApiError("Data de execucao invalida. O motor so pode rodar nos dias 5, 15 ou 25 (ou proximo dia util).", "DATA_EXECUCAO_INVALIDA"));
+            return BadRequest(new ApiError(BuildInvalidExecutionDateMessage(request.DataReferencia), "DATA_EXECUCAO_INVALIDA"));
         }
         catch (InvalidOperationException ex) when (ex.Message == "COMPRA_JA_EXECUTADA")
         {
@@ -125,5 +125,25 @@ public sealed class MotorController : ControllerBase
             .ToListAsync(ct);
 
         return Ok(new MotorHistoricoResponse(items));
+    }
+
+    private static string BuildInvalidExecutionDateMessage(DateOnly referenceDate)
+    {
+        var d5 = ResolveRunDate(referenceDate.Year, referenceDate.Month, 5);
+        var d15 = ResolveRunDate(referenceDate.Year, referenceDate.Month, 15);
+        var d25 = ResolveRunDate(referenceDate.Year, referenceDate.Month, 25);
+
+        return $"Data de execucao invalida para {referenceDate:yyyy-MM-dd}. Datas validas no mes: {d5:yyyy-MM-dd}, {d15:yyyy-MM-dd}, {d25:yyyy-MM-dd}.";
+    }
+
+    private static DateOnly ResolveRunDate(int year, int month, int day)
+    {
+        var date = new DateOnly(year, month, day);
+        while (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+        {
+            date = date.AddDays(1);
+        }
+
+        return date;
     }
 }

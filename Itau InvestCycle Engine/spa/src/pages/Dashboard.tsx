@@ -55,7 +55,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="max-w-4xl space-y-8">
+    <div className="mx-auto w-full max-w-4xl space-y-6 sm:space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground mt-1">Painel de Compra Programada - Top Five</p>
