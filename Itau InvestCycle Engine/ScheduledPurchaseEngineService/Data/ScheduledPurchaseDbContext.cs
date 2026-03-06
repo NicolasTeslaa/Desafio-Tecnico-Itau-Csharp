@@ -116,8 +116,21 @@ public sealed class ScheduledPurchaseDbContext : DbContext
         modelBuilder.Entity<Distribuicoes>(e =>
         {
             e.ToTable("distribuicoes");
-            e.Property(x => x.Ticker).HasMaxLength(10);
+            e.Property(x => x.Ticker).HasMaxLength(10).IsRequired();
+            e.Property(x => x.OrdemCompraId).IsRequired();
+            e.Property(x => x.CustodiaFilhoteId).IsRequired();
+            e.Property(x => x.PrecoUnitario).HasPrecision(18, 4);
             e.Property(x => x.Valor).HasPrecision(18, 2);
+
+            e.HasOne(x => x.OrdemCompra)
+                .WithMany()
+                .HasForeignKey(x => x.OrdemCompraId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.CustodiaFilhote)
+                .WithMany()
+                .HasForeignKey(x => x.CustodiaFilhoteId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OrdensCompra>(e =>
@@ -125,6 +138,7 @@ public sealed class ScheduledPurchaseDbContext : DbContext
             e.ToTable("ordens_compra");
             e.Property(x => x.Ticker).HasMaxLength(10);
             e.Property(x => x.PrecoUnitario).HasPrecision(18, 2);
+            e.Property(x => x.QuantidadeDisponivel).IsRequired();
 
             e.HasOne(x => x.ContaGrafica)
                 .WithMany()
@@ -149,6 +163,8 @@ public sealed class ScheduledPurchaseDbContext : DbContext
             e.ToTable("rebalanceamentos");
             e.Property(x => x.TickerVendido).HasMaxLength(10).IsRequired();
             e.Property(x => x.TickerComprado).HasMaxLength(10).IsRequired();
+            e.Property(x => x.PrecoUnitarioVenda).HasPrecision(18, 4);
+            e.Property(x => x.PrecoUnitarioCompra).HasPrecision(18, 4);
             e.Property(x => x.ValorVenda).HasPrecision(18, 2);
 
             e.HasOne(x => x.Cliente)

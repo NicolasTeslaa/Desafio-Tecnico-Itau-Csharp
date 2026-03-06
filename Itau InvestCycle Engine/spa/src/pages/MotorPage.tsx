@@ -43,7 +43,7 @@ function getValidRunDatesHint(referenceIso?: string): string {
   const d15 = resolveRunDate(year, month, 15);
   const d25 = resolveRunDate(year, month, 25);
 
-  return `Datas validas neste mes: ${formatDateBr(d5)}, ${formatDateBr(d15)}, ${formatDateBr(d25)}).`;
+  return `Datas validas neste mes: (${formatDateBr(d5)}, ${formatDateBr(d15)}, ${formatDateBr(d25)}).`;
 }
 
 function getRunDateValidation(referenceIso?: string): { valid: boolean; reason?: string } {

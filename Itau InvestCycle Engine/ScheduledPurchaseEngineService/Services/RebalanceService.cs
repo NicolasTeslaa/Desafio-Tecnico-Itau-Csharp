@@ -109,6 +109,7 @@ public sealed class RebalanceService : IRebalanceService
                 decimal caixaDisponivel = 0m;
                 decimal totalVendas = 0m;
                 decimal lucroLiquido = 0m;
+                var detalhesIrVenda = new List<IrVendaKafkaDetail>();
 
                 foreach (var tickerVendido in tickersRemovidos)
                 {
@@ -123,18 +124,24 @@ public sealed class RebalanceService : IRebalanceService
                     }
 
                     var valorVenda = Math.Round(custodia.Quantidade * quoteVenda, 2);
+                    var lucroVenda = Math.Round((quoteVenda - custodia.PrecoMedio) * custodia.Quantidade, 2);
                     caixaDisponivel += valorVenda;
                     totalVendas += valorVenda;
-                    lucroLiquido += Math.Round((quoteVenda - custodia.PrecoMedio) * custodia.Quantidade, 2);
+                    lucroLiquido += lucroVenda;
+                    detalhesIrVenda.Add(new IrVendaKafkaDetail(
+                        Ticker: tickerVendido,
+                        Quantidade: custodia.Quantidade,
+                        PrecoVenda: quoteVenda,
+                        PrecoMedio: custodia.PrecoMedio,
+                        Lucro: lucroVenda));
 
-                    await rebalsRepo.AddAsync(new Rebalanceamentos
-                    {
-                        ClienteId = cliente.Id,
-                        TickerVendido = tickerVendido,
-                        TickerComprado = "CAIXA",
-                        ValorVenda = valorVenda,
-                        DataRebalanceamento = now
-                    }, ct);
+                    await rebalsRepo.AddAsync(CreateSaleRebalanceamento(
+                        cliente.Id,
+                        tickerVendido,
+                        custodia.Quantidade,
+                        quoteVenda,
+                        valorVenda,
+                        now), ct);
 
                     custodiasRepo.Remove(custodia);
                     custodiasByTicker.Remove(tickerVendido);
@@ -189,9 +196,16 @@ public sealed class RebalanceService : IRebalanceService
                         }
 
                         var valorVenda = Math.Round(qtySell * quoteVenda, 2);
+                        var lucroVenda = Math.Round((quoteVenda - custodiaAtual.PrecoMedio) * qtySell, 2);
                         caixaDisponivel += valorVenda;
                         totalVendas += valorVenda;
-                        lucroLiquido += Math.Round((quoteVenda - custodiaAtual.PrecoMedio) * qtySell, 2);
+                        lucroLiquido += lucroVenda;
+                        detalhesIrVenda.Add(new IrVendaKafkaDetail(
+                            Ticker: ticker,
+                            Quantidade: qtySell,
+                            PrecoVenda: quoteVenda,
+                            PrecoMedio: custodiaAtual.PrecoMedio,
+                            Lucro: lucroVenda));
 
                         custodiaAtual.Quantidade -= qtySell;
                         custodiaAtual.DataUltimaAtualizacao = now;
@@ -206,14 +220,13 @@ public sealed class RebalanceService : IRebalanceService
                             custodiasRepo.Update(custodiaAtual);
                         }
 
-                        await rebalsRepo.AddAsync(new Rebalanceamentos
-                        {
-                            ClienteId = cliente.Id,
-                            TickerVendido = ticker,
-                            TickerComprado = "CAIXA",
-                            ValorVenda = valorVenda,
-                            DataRebalanceamento = now
-                        }, ct);
+                        await rebalsRepo.AddAsync(CreateSaleRebalanceamento(
+                            cliente.Id,
+                            ticker,
+                            qtySell,
+                            quoteVenda,
+                            valorVenda,
+                            now), ct);
 
                         houveMovimentacao = true;
                     }
@@ -285,6 +298,13 @@ public sealed class RebalanceService : IRebalanceService
                                 custodiasByTicker[item.Ticker] = nova;
                             }
 
+                            await rebalsRepo.AddAsync(CreateBuyRebalanceamento(
+                                cliente.Id,
+                                item.Ticker,
+                                qtyCompra,
+                                item.Quote,
+                                now), ct);
+
                             houveMovimentacao = true;
                         }
                     }
@@ -316,7 +336,16 @@ public sealed class RebalanceService : IRebalanceService
                         };
 
                         await eventosRepo.AddAsync(evento, ct);
-                        eventosParaPublicar.Add(new PendingIrEvent(evento, cliente.CPF, "REBAL"));
+                        eventosParaPublicar.Add(new PendingIrEvent(
+                            evento,
+                            cliente.CPF,
+                            new IrVendaKafkaPayload(
+                                MesReferencia: $"{now:yyyy-MM}",
+                                TotalVendasMes: Math.Round(totalVendasMes, 2),
+                                LucroLiquido: Math.Round(lucroLiquido, 2),
+                                Aliquota: 0.20m,
+                                Detalhes: detalhesIrVenda,
+                                DataCalculo: now)));
                     }
                 }
 
@@ -455,6 +484,7 @@ public sealed class RebalanceService : IRebalanceService
 
                 decimal totalVendas = 0m;
                 decimal lucroLiquido = 0m;
+                var detalhesIrVenda = new List<IrVendaKafkaDetail>();
 
                 foreach (var kv in diffByTicker.Where(x => x.Value < 0m).ToList())
                 {
@@ -468,8 +498,15 @@ public sealed class RebalanceService : IRebalanceService
                     if (qtySell <= 0) continue;
 
                     var valorVenda = Math.Round(qtySell * quoteVenda, 2);
+                    var lucroVenda = Math.Round((quoteVenda - custodia.PrecoMedio) * qtySell, 2);
                     totalVendas += valorVenda;
-                    lucroLiquido += Math.Round((quoteVenda - custodia.PrecoMedio) * qtySell, 2);
+                    lucroLiquido += lucroVenda;
+                    detalhesIrVenda.Add(new IrVendaKafkaDetail(
+                        Ticker: ticker,
+                        Quantidade: qtySell,
+                        PrecoVenda: quoteVenda,
+                        PrecoMedio: custodia.PrecoMedio,
+                        Lucro: lucroVenda));
 
                     custodia.Quantidade -= qtySell;
                     custodia.DataUltimaAtualizacao = now;
@@ -483,14 +520,13 @@ public sealed class RebalanceService : IRebalanceService
                         custodiasRepo.Update(custodia);
                     }
 
-                    await rebalsRepo.AddAsync(new Rebalanceamentos
-                    {
-                        ClienteId = cliente.Id,
-                        TickerVendido = ticker,
-                        TickerComprado = "CAIXA",
-                        ValorVenda = valorVenda,
-                        DataRebalanceamento = now
-                    }, ct);
+                    await rebalsRepo.AddAsync(CreateSaleRebalanceamento(
+                        cliente.Id,
+                        ticker,
+                        qtySell,
+                        quoteVenda,
+                        valorVenda,
+                        now), ct);
                 }
 
                 if (totalVendas > 0m)
@@ -530,6 +566,13 @@ public sealed class RebalanceService : IRebalanceService
                                 await custodiasRepo.AddAsync(nova, ct);
                                 holdings[ticker] = nova;
                             }
+
+                            await rebalsRepo.AddAsync(CreateBuyRebalanceamento(
+                                cliente.Id,
+                                ticker,
+                                qtyBuy,
+                                quoteCompra,
+                                now), ct);
                         }
                     }
 
@@ -554,7 +597,16 @@ public sealed class RebalanceService : IRebalanceService
                             DataEvento = now
                         };
                         await eventosRepo.AddAsync(evento, ct);
-                        eventosParaPublicar.Add(new PendingIrEvent(evento, cliente.CPF, "REBAL"));
+                        eventosParaPublicar.Add(new PendingIrEvent(
+                            evento,
+                            cliente.CPF,
+                            new IrVendaKafkaPayload(
+                                MesReferencia: $"{now:yyyy-MM}",
+                                TotalVendasMes: Math.Round(totalVendasMes, 2),
+                                LucroLiquido: Math.Round(lucroLiquido, 2),
+                                Aliquota: 0.20m,
+                                Detalhes: detalhesIrVenda,
+                                DataCalculo: now)));
                     }
 
                     rebalanced++;
@@ -586,11 +638,11 @@ public sealed class RebalanceService : IRebalanceService
             {
                 if (evt.Tipo == TipoIR.IR_Venda)
                 {
-                    await _publisher.PublishIrVendaAsync(evt, pending.Cpf, pending.Ticker, ct);
+                    await _publisher.PublishIrVendaAsync(evt, pending.Cpf, pending.IrVendaPayload!, ct);
                 }
                 else
                 {
-                    await _publisher.PublishIrDedoDuroAsync(evt, pending.Cpf, pending.Ticker, ct);
+                    await _publisher.PublishIrDedoDuroAsync(evt, pending.Cpf, pending.Ticker!, ct);
                 }
 
                 await _uow.BeginAsync(ct);
@@ -606,7 +658,46 @@ public sealed class RebalanceService : IRebalanceService
         }
     }
 
-    private sealed record PendingIrEvent(EventosIR Event, string Cpf, string Ticker);
+    private sealed record PendingIrEvent(
+        EventosIR Event,
+        string Cpf,
+        IrVendaKafkaPayload? IrVendaPayload = null,
+        string? Ticker = null);
+
+    private static Rebalanceamentos CreateSaleRebalanceamento(
+        int clienteId,
+        string ticker,
+        int quantidade,
+        decimal precoUnitario,
+        decimal valorVenda,
+        DateTime dataRebalanceamento)
+        => new()
+        {
+            ClienteId = clienteId,
+            TickerVendido = ticker,
+            TickerComprado = "CAIXA",
+            QuantidadeVendida = quantidade,
+            PrecoUnitarioVenda = precoUnitario,
+            ValorVenda = valorVenda,
+            DataRebalanceamento = dataRebalanceamento
+        };
+
+    private static Rebalanceamentos CreateBuyRebalanceamento(
+        int clienteId,
+        string ticker,
+        int quantidade,
+        decimal precoUnitario,
+        DateTime dataRebalanceamento)
+        => new()
+        {
+            ClienteId = clienteId,
+            TickerVendido = "CAIXA",
+            TickerComprado = ticker,
+            QuantidadeComprada = quantidade,
+            PrecoUnitarioCompra = precoUnitario,
+            ValorVenda = 0m,
+            DataRebalanceamento = dataRebalanceamento
+        };
 
     private static string NormalizeTicker(string ticker) => ticker.Trim().ToUpperInvariant();
 }

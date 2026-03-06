@@ -13,6 +13,10 @@ public class Rebalanceamentos
     public string TickerVendido { get; set; }
     [MaxLength(10)]
     public string TickerComprado { get; set; }
+    public int? QuantidadeVendida { get; set; }
+    public decimal? PrecoUnitarioVenda { get; set; }
+    public int? QuantidadeComprada { get; set; }
+    public decimal? PrecoUnitarioCompra { get; set; }
     public decimal ValorVenda { get; set; }
     public DateTime DataRebalanceamento { get; set; }   
 }

@@ -4,6 +4,7 @@ using ClassLibrary.Domain.Entities;
 using ClassLibrary.Domain.Entities.Cestas;
 using ClassLibrary.Domain.Entities.Clientes;
 using ClassLibrary.Domain.Entities.CompraDistribuicao;
+using ClassLibrary.Domain.Entities.RebalanceamentoIR;
 using Itau.InvestCycleEngine.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using ScheduledPurchaseEngineService.Interfaces;
@@ -391,7 +392,7 @@ public sealed class ClientService : IClentService
             var rentabilidade = valorTotalInvestido > 0m ? Math.Round((plTotal / valorTotalInvestido) * 100m, 2) : 0m;
 
             var historicoAportes = await BuildHistoricoAportesAsync(cliente, ct);
-            var evolucao = BuildEvolucaoCarteira(historicoAportes, valorAtualCarteira, valorTotalInvestido);
+            var evolucao = await BuildEvolucaoCarteiraAsync(cliente.Id, conta?.Id, historicoAportes, ct);
 
             return Result<ConsultarRentabilidadeResponse, ApiError>.Success(new ConsultarRentabilidadeResponse(
                 ClienteId: cliente.Id,
@@ -498,10 +499,11 @@ public sealed class ClientService : IClentService
             .ToList();
     }
 
-    private static IReadOnlyList<EvolucaoCarteiraResponse> BuildEvolucaoCarteira(
+    private async Task<IReadOnlyList<EvolucaoCarteiraResponse>> BuildEvolucaoCarteiraAsync(
+        int clienteId,
+        int? contaGraficaId,
         IReadOnlyList<HistoricoAporteResponse> historicoAportes,
-        decimal valorAtualCarteira,
-        decimal valorTotalInvestido)
+        CancellationToken ct)
     {
         var evolucao = new List<EvolucaoCarteiraResponse>();
         if (historicoAportes.Count == 0)
@@ -509,27 +511,198 @@ public sealed class ClientService : IClentService
             return evolucao;
         }
 
-        var fatorAtual = valorTotalInvestido > 0m
-            ? valorAtualCarteira / valorTotalInvestido
-            : 1m;
+        var aportesPorData = historicoAportes
+            .GroupBy(x => x.Data)
+            .OrderBy(x => x.Key)
+            .Select(x => new AporteSnapshot(x.Key, Math.Round(x.Sum(y => y.Valor), 2)))
+            .ToList();
 
-        decimal acumulado = 0m;
-        foreach (var aporte in historicoAportes)
+        if (contaGraficaId is null)
         {
-            acumulado = Math.Round(acumulado + aporte.Valor, 2);
-            var valorCarteira = Math.Round(acumulado * fatorAtual, 2);
-            var rentabilidade = acumulado > 0m
-                ? Math.Round(((valorCarteira - acumulado) / acumulado) * 100m, 2)
+            return BuildEmptyEvolution(aportesPorData);
+        }
+
+        var distribuicoesRepo = _uow.Repository<Distribuicoes>();
+        var rebalanceamentosRepo = _uow.Repository<Rebalanceamentos>();
+        var cotacoesRepo = _uow.Repository<Cotacoes>();
+
+        var ultimaData = aportesPorData[^1].Data.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+
+        var distribuicoes = await distribuicoesRepo.Query()
+            .AsNoTracking()
+            .Where(x => x.CustodiaFilhote.ContasGraficasId == contaGraficaId.Value && x.DataDistribuicao <= ultimaData)
+            .OrderBy(x => x.DataDistribuicao)
+            .ThenBy(x => x.Id)
+            .ToListAsync(ct);
+
+        var rebalanceamentos = await rebalanceamentosRepo.Query()
+            .AsNoTracking()
+            .Where(x => x.ClienteId == clienteId && x.DataRebalanceamento <= ultimaData)
+            .OrderBy(x => x.DataRebalanceamento)
+            .ThenBy(x => x.Id)
+            .ToListAsync(ct);
+
+        var movimentos = BuildMovimentosCarteira(distribuicoes, rebalanceamentos);
+        if (movimentos.Count == 0)
+        {
+            return BuildEmptyEvolution(aportesPorData);
+        }
+
+        var tickers = movimentos
+            .Select(x => x.Ticker.Trim().ToUpperInvariant())
+            .Distinct()
+            .ToList();
+
+        var cotacoes = await cotacoesRepo.Query()
+            .AsNoTracking()
+            .Where(x => tickers.Contains(x.Ticker) && x.DataPregao <= ultimaData.Date)
+            .OrderBy(x => x.DataPregao)
+            .ToListAsync(ct);
+
+        var cotacoesPorTicker = cotacoes
+            .GroupBy(x => x.Ticker.Trim().ToUpperInvariant())
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.DataPregao).ToList());
+
+        var quantidadePorTicker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var ultimoPrecoMovimento = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var movimentoIndex = 0;
+        decimal valorInvestido = 0m;
+
+        foreach (var aporte in aportesPorData)
+        {
+            valorInvestido = Math.Round(valorInvestido + aporte.Valor, 2);
+
+            while (movimentoIndex < movimentos.Count &&
+                   DateOnly.FromDateTime(movimentos[movimentoIndex].DataHoraUtc) <= aporte.Data)
+            {
+                var movimento = movimentos[movimentoIndex];
+                var ticker = movimento.Ticker.Trim().ToUpperInvariant();
+                var quantidadeAtual = quantidadePorTicker.GetValueOrDefault(ticker) + movimento.QuantidadeDelta;
+
+                if (quantidadeAtual > 0)
+                {
+                    quantidadePorTicker[ticker] = quantidadeAtual;
+                }
+                else
+                {
+                    quantidadePorTicker.Remove(ticker);
+                }
+
+                ultimoPrecoMovimento[ticker] = movimento.PrecoReferencia;
+                movimentoIndex++;
+            }
+
+            var valorCarteira = 0m;
+            foreach (var item in quantidadePorTicker.Where(x => x.Value > 0))
+            {
+                var preco = ResolveHistoricalPrice(
+                    item.Key,
+                    aporte.Data,
+                    cotacoesPorTicker,
+                    ultimoPrecoMovimento);
+
+                valorCarteira += item.Value * preco;
+            }
+
+            valorCarteira = Math.Round(valorCarteira, 2);
+
+            var rentabilidade = valorInvestido > 0m
+                ? Math.Round(((valorCarteira - valorInvestido) / valorInvestido) * 100m, 2)
                 : 0m;
 
             evolucao.Add(new EvolucaoCarteiraResponse(
                 aporte.Data,
                 valorCarteira,
-                acumulado,
+                valorInvestido,
                 rentabilidade));
         }
 
         return evolucao;
+    }
+
+    private static IReadOnlyList<EvolucaoCarteiraResponse> BuildEmptyEvolution(
+        IReadOnlyList<AporteSnapshot> aportesPorData)
+    {
+        var evolucao = new List<EvolucaoCarteiraResponse>();
+        decimal valorInvestido = 0m;
+
+        foreach (var aporte in aportesPorData)
+        {
+            valorInvestido = Math.Round(valorInvestido + (decimal)aporte.Valor, 2);
+            evolucao.Add(new EvolucaoCarteiraResponse(aporte.Data, 0m, valorInvestido, valorInvestido > 0m ? -100m : 0m));
+        }
+
+        return evolucao;
+    }
+
+    private sealed record AporteSnapshot(DateOnly Data, decimal Valor);
+    private sealed record CarteiraMovimentoSnapshot(DateTime DataHoraUtc, string Ticker, int QuantidadeDelta, decimal PrecoReferencia, int SortOrder);
+
+    private static IReadOnlyList<CarteiraMovimentoSnapshot> BuildMovimentosCarteira(
+        IReadOnlyList<Distribuicoes> distribuicoes,
+        IReadOnlyList<Rebalanceamentos> rebalanceamentos)
+    {
+        var movimentos = new List<CarteiraMovimentoSnapshot>(distribuicoes.Count + (rebalanceamentos.Count * 2));
+
+        movimentos.AddRange(distribuicoes.Select(x => new CarteiraMovimentoSnapshot(
+            x.DataDistribuicao,
+            x.Ticker.Trim().ToUpperInvariant(),
+            x.Quantidade,
+            x.PrecoUnitario,
+            0)));
+
+        foreach (var rebalanceamento in rebalanceamentos)
+        {
+            if (rebalanceamento.QuantidadeVendida is > 0 && !string.Equals(rebalanceamento.TickerVendido, "CAIXA", StringComparison.OrdinalIgnoreCase))
+            {
+                movimentos.Add(new CarteiraMovimentoSnapshot(
+                    rebalanceamento.DataRebalanceamento,
+                    rebalanceamento.TickerVendido.Trim().ToUpperInvariant(),
+                    -rebalanceamento.QuantidadeVendida.Value,
+                    rebalanceamento.PrecoUnitarioVenda ?? 0m,
+                    1));
+            }
+
+            if (rebalanceamento.QuantidadeComprada is > 0 && !string.Equals(rebalanceamento.TickerComprado, "CAIXA", StringComparison.OrdinalIgnoreCase))
+            {
+                movimentos.Add(new CarteiraMovimentoSnapshot(
+                    rebalanceamento.DataRebalanceamento,
+                    rebalanceamento.TickerComprado.Trim().ToUpperInvariant(),
+                    rebalanceamento.QuantidadeComprada.Value,
+                    rebalanceamento.PrecoUnitarioCompra ?? 0m,
+                    2));
+            }
+        }
+
+        return movimentos
+            .OrderBy(x => x.DataHoraUtc)
+            .ThenBy(x => x.SortOrder)
+            .ToList();
+    }
+
+    private static decimal ResolveHistoricalPrice(
+        string ticker,
+        DateOnly snapshotDate,
+        IReadOnlyDictionary<string, List<Cotacoes>> cotacoesPorTicker,
+        IReadOnlyDictionary<string, decimal> ultimoPrecoDistribuicao)
+    {
+        if (cotacoesPorTicker.TryGetValue(ticker, out var cotacoes))
+        {
+            for (var i = cotacoes.Count - 1; i >= 0; i--)
+            {
+                if (DateOnly.FromDateTime(cotacoes[i].DataPregao) <= snapshotDate)
+                {
+                    return cotacoes[i].PrecoFechamento;
+                }
+            }
+        }
+
+        if (ultimoPrecoDistribuicao.TryGetValue(ticker, out var precoDistribuicao))
+        {
+            return precoDistribuicao;
+        }
+
+        return 0m;
     }
 
     private static DateOnly NextBusinessDay(DateOnly date)

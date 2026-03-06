@@ -166,47 +166,40 @@ public sealed class CotacoesService : ICotacoesService
 
     private async Task UpsertBatchAsync(IEnumerable<Cotacoes> items, CancellationToken ct)
     {
-        var list = items.ToList();
+        var list = items
+            .Select(x =>
+            {
+                x.Ticker = (x.Ticker ?? "").Trim().ToUpperInvariant();
+                x.DataPregao = x.DataPregao.Date;
+                return x;
+            })
+            .GroupBy(x => BuildQuoteKey(x.DataPregao, x.Ticker))
+            .Select(g => g.Last())
+            .ToList();
         if (list.Count == 0) return;
-
-        foreach (var c in list)
-            c.Ticker = (c.Ticker ?? "").Trim().ToUpperInvariant();
 
         var repo = _uow.Repository<Cotacoes>();
 
         var tickers = list.Select(x => x.Ticker).Distinct().ToList();
-        var dates = list.Select(x => x.DataPregao.Date).Distinct().ToList();
+        var incomingKeys = list
+            .Select(x => BuildQuoteKey(x.DataPregao, x.Ticker))
+            .ToHashSet();
 
         try
         {
             await _uow.BeginAsync(ct);
 
             var existing = await repo.Query()
-                .Where(x => tickers.Contains(x.Ticker) && dates.Contains(x.DataPregao.Date))
+                .Where(x => tickers.Contains(x.Ticker))
                 .ToListAsync(ct);
-
-            var map = existing.ToDictionary(
-                x => (Date: x.DataPregao.Date, Ticker: x.Ticker),
-                x => x
-            );
+            foreach (var current in existing.Where(x => incomingKeys.Contains(BuildQuoteKey(x.DataPregao.Date, x.Ticker))))
+            {
+                repo.Remove(current);
+            }
 
             foreach (var incoming in list)
             {
-                var key = (incoming.DataPregao.Date, incoming.Ticker);
-
-                if (map.TryGetValue(key, out var current))
-                {
-                    current.PrecoAbertura = incoming.PrecoAbertura;
-                    current.PrecoFechamento = incoming.PrecoFechamento;
-                    current.PrecoMaximo = incoming.PrecoMaximo;
-                    current.PrecoMinimo = incoming.PrecoMinimo;
-                    repo.Update(current);
-                }
-                else
-                {
-                    incoming.DataPregao = incoming.DataPregao.Date;
-                    await repo.AddAsync(incoming, ct);
-                }
+                await repo.AddAsync(incoming, ct);
             }
 
             await _uow.CommitAsync(ct);
@@ -218,4 +211,7 @@ public sealed class CotacoesService : ICotacoesService
             throw;
         }
     }
+
+    private static string BuildQuoteKey(DateTime dataPregao, string ticker)
+        => $"{dataPregao:yyyy-MM-dd}|{ticker.Trim().ToUpperInvariant()}";
 }

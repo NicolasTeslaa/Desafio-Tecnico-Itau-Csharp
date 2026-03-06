@@ -31,7 +31,7 @@ public sealed class ClienteValorMensalHistoricoRepository : IClienteValorMensalH
         var value = await _repo.Query()
             .Where(x => x.ClienteId == clienteId && x.DataAlteracaoUtc <= boundary)
             .OrderByDescending(x => x.DataAlteracaoUtc)
-            .Select(x => x.ValorNovo)
+            .Select(x => (decimal?)x.ValorNovo)
             .FirstOrDefaultAsync(ct);
 
         return value;

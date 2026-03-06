@@ -24,6 +24,15 @@ public sealed class AdminService : IAdminService
     }
 
     public async Task<Result<CadastrarOuAlterarCestaResponse, ApiError>> CadastrarOuAlterarCestaAsync(CadastrarOuAlterarCestaRequest request, CancellationToken ct)
+        => await SalvarNovaVersaoCestaAsync(request, expectedActiveCestaId: null, ct);
+
+    public async Task<Result<CadastrarOuAlterarCestaResponse, ApiError>> EditarCestaAsync(int cestaId, CadastrarOuAlterarCestaRequest request, CancellationToken ct)
+        => await SalvarNovaVersaoCestaAsync(request, expectedActiveCestaId: cestaId, ct);
+
+    private async Task<Result<CadastrarOuAlterarCestaResponse, ApiError>> SalvarNovaVersaoCestaAsync(
+        CadastrarOuAlterarCestaRequest request,
+        int? expectedActiveCestaId,
+        CancellationToken ct)
     {
         var validacao = await ValidateAndNormalizeItensAsync(request, ct);
         if (!validacao.IsSuccess)
@@ -38,6 +47,25 @@ public sealed class AdminService : IAdminService
 
         try
         {
+            if (expectedActiveCestaId.HasValue)
+            {
+                var cestaSolicitada = await cestasRepo.Query()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == expectedActiveCestaId.Value, ct);
+
+                if (cestaSolicitada is null)
+                {
+                    return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(
+                        new ApiError("Cesta nao encontrada.", "CESTA_NAO_ENCONTRADA"));
+                }
+
+                if (!cestaSolicitada.Ativa)
+                {
+                    return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(
+                        new ApiError("Apenas a cesta ativa pode ser alterada.", "CESTA_INATIVA"));
+                }
+            }
+
             var cestasAtivas = await cestasRepo.Query()
                 .Where(x => x.Ativa)
                 .ToListAsync(ct);
@@ -45,6 +73,12 @@ public sealed class AdminService : IAdminService
             var cestaAnterior = cestasAtivas
                 .OrderByDescending(x => x.DataCriacao)
                 .FirstOrDefault();
+
+            if (expectedActiveCestaId.HasValue && cestaAnterior?.Id != expectedActiveCestaId.Value)
+            {
+                return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(
+                    new ApiError("A alteracao deve partir da cesta ativa atual.", "CESTA_INATIVA"));
+            }
 
             var cestaAnteriorItens = cestaAnterior is null
                 ? []
@@ -90,7 +124,7 @@ public sealed class AdminService : IAdminService
             var rebalanceamentoDisparado = cestaAnterior is not null;
             if (rebalanceamentoDisparado)
             {
-                await _rebalanceService.RebalanceByBasketChangeAsync(cestaAnterior!.Id, novaCesta.Id, ct);
+                await _rebalanceService.RebalanceByBasketChangeAsync(cestaAnterior.Id, novaCesta.Id, ct);
             }
 
             var tickersAnteriores = cestaAnteriorItens
@@ -143,104 +177,6 @@ public sealed class AdminService : IAdminService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao cadastrar/alterar cesta.");
-            await _uow.RollbackAsync(ct);
-            throw;
-        }
-    }
-
-    public async Task<Result<CadastrarOuAlterarCestaResponse, ApiError>> EditarCestaAsync(int cestaId, CadastrarOuAlterarCestaRequest request, CancellationToken ct)
-    {
-        var validacao = await ValidateAndNormalizeItensAsync(request, ct);
-        if (!validacao.IsSuccess)
-            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(validacao.Err!);
-
-        var normalizedItens = validacao.Ok!;
-        var cestasRepo = _uow.Repository<CestasRecomendacao>();
-        var itensCestaRepo = _uow.Repository<ItensCesta>();
-
-        var cesta = await cestasRepo.Query()
-            .FirstOrDefaultAsync(x => x.Id == cestaId, ct);
-
-        if (cesta is null)
-        {
-            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Failure(
-                new ApiError("Cesta nao encontrada.", "CESTA_NAO_ENCONTRADA"));
-        }
-
-        var itensAtuais = await itensCestaRepo.Query()
-            .Where(x => x.CestaId == cestaId)
-            .ToListAsync(ct);
-
-        try
-        {
-            await _uow.BeginAsync(ct);
-
-            foreach (var item in itensAtuais)
-            {
-                itensCestaRepo.Remove(item);
-            }
-
-            cesta.Nome = request.Nome;
-            cestasRepo.Update(cesta);
-
-            var itensNovos = normalizedItens
-                .Select(x => new ItensCesta
-                {
-                    CestaId = cestaId,
-                    Ticker = x.Ticker,
-                    Percentual = x.Percentual
-                })
-                .ToList();
-
-            foreach (var item in itensNovos)
-            {
-                await itensCestaRepo.AddAsync(item, ct);
-            }
-
-            await _uow.CommitAsync(ct);
-
-            var tickersAnteriores = itensAtuais
-                .Select(x => NormalizeTicker(x.Ticker))
-                .ToHashSet();
-
-            var tickersNovos = itensNovos
-                .Select(x => NormalizeTicker(x.Ticker))
-                .ToHashSet();
-
-            var ativosRemovidos = tickersAnteriores.Except(tickersNovos).OrderBy(x => x).ToList();
-            var ativosAdicionados = tickersNovos.Except(tickersAnteriores).OrderBy(x => x).ToList();
-            var percentualAnteriorPorTicker = itensAtuais
-                .GroupBy(x => NormalizeTicker(x.Ticker))
-                .ToDictionary(g => g.Key, g => g.First().Percentual);
-            var percentualNovoPorTicker = itensNovos
-                .GroupBy(x => NormalizeTicker(x.Ticker))
-                .ToDictionary(g => g.Key, g => g.First().Percentual);
-            var ativosPercentualAlterado = percentualAnteriorPorTicker.Keys
-                .Intersect(percentualNovoPorTicker.Keys)
-                .Select(ticker => new AtivoPercentualAlteradoResponse(
-                    Ticker: ticker,
-                    PercentualAnterior: percentualAnteriorPorTicker[ticker],
-                    PercentualNovo: percentualNovoPorTicker[ticker]))
-                .Where(x => Math.Abs(x.PercentualAnterior - x.PercentualNovo) > 0.0001m)
-                .OrderBy(x => x.Ticker)
-                .ToList();
-
-            return Result<CadastrarOuAlterarCestaResponse, ApiError>.Success(new CadastrarOuAlterarCestaResponse(
-                CestaId: cesta.Id,
-                Nome: cesta.Nome,
-                Ativa: cesta.Ativa,
-                DataCriacao: cesta.DataCriacao,
-                Itens: itensNovos.Select(x => new CestaItemResponse(x.Ticker, x.Percentual)).ToList(),
-                CestaAnteriorDesativada: null,
-                RebalanceamentoDisparado: false,
-                AtivosRemovidos: ativosRemovidos,
-                AtivosAdicionados: ativosAdicionados,
-                Mensagem: "Cesta atualizada com sucesso.",
-                AtivosPercentualAlterado: ativosPercentualAlterado));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Erro ao editar cesta {CestaId}.", cestaId);
             await _uow.RollbackAsync(ct);
             throw;
         }
@@ -403,6 +339,7 @@ public sealed class AdminService : IAdminService
         var contasRepo = _uow.Repository<ContasGraficas>();
         var custodiasRepo = _uow.Repository<Custodias>();
         var cotacoesRepo = _uow.Repository<Cotacoes>();
+        var ordensRepo = _uow.Repository<OrdensCompra>();
 
         var contaMaster = await contasRepo.Query()
             .AsNoTracking()
@@ -434,18 +371,34 @@ public sealed class AdminService : IAdminService
             .GroupBy(x => x.Ticker.Trim().ToUpperInvariant())
             .ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.DataPregao).First().PrecoFechamento);
 
+        var ordensMasterPendentes = await ordensRepo.Query()
+            .AsNoTracking()
+            .Where(x => x.ContaMasterId == contaMaster.Id)
+            .OrderByDescending(x => x.DataExecucao)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(ct);
+
+        var ordensPendentesPorTicker = ordensMasterPendentes
+            .GroupBy(x => NormalizeOrderTicker(x.Ticker))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         var custodiaResponse = custodias.Select(c =>
         {
             var ticker = c.Ticker.Trim().ToUpperInvariant();
             var cotacaoAtual = cotacaoAtualPorTicker.TryGetValue(ticker, out var quote) ? quote : c.PrecoMedio;
             var valorAtual = Math.Round(cotacaoAtual * c.Quantidade, 2);
+            var origem = ordensPendentesPorTicker.TryGetValue(ticker, out var ordensTicker) && ordensTicker.Count > 0
+                ? ordensTicker.Count == 1
+                    ? $"Residuo da ordem {ordensTicker[0].Id} de {ordensTicker[0].DataExecucao:yyyy-MM-dd}"
+                    : $"Residuos originados por {ordensTicker.Count} ordens"
+                : $"Residuo distribuicao {c.DataUltimaAtualizacao:yyyy-MM-dd}";
 
             return new CustodiaMasterItemResponse(
                 Ticker: ticker,
                 Quantidade: c.Quantidade,
                 PrecoMedio: c.PrecoMedio,
                 ValorAtual: valorAtual,
-                Origem: $"Residuo distribuicao {c.DataUltimaAtualizacao:yyyy-MM-dd}");
+                Origem: origem);
         }).ToList();
 
         return Result<ContaMasterCustodiaResponse, ApiError>.Success(new ContaMasterCustodiaResponse(
@@ -556,4 +509,10 @@ public sealed class AdminService : IAdminService
 
     private static string NormalizeTicker(string? ticker)
         => (ticker ?? string.Empty).Trim().ToUpperInvariant();
+
+    private static string NormalizeOrderTicker(string? ticker)
+    {
+        var normalized = NormalizeTicker(ticker);
+        return normalized.EndsWith('F') ? normalized[..^1] : normalized;
+    }
 }

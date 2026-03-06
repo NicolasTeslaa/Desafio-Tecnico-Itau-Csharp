@@ -141,10 +141,6 @@ public sealed class IngestJobBackgroundService : BackgroundService, IIngestJobSe
                 _logger.LogError(ex, "Erro ao processar job de ingestao {JobId} ({File})", item.JobId, item.File);
                 await MarkFailedAsync(item.JobId, ex.Message, stoppingToken);
             }
-            finally
-            {
-                TryDelete(item.FilePath);
-            }
         }
     }
 
@@ -211,19 +207,6 @@ public sealed class IngestJobBackgroundService : BackgroundService, IIngestJobSe
         job.FinishedAtUtc = DateTime.UtcNow;
         repo.Update(job);
         await uow.CommitAsync(ct);
-    }
-
-    private void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Nao foi possivel remover arquivo temporario {Path}", path);
-        }
     }
 
     private static IngestJobStatusResponse ToDto(IngestaoJob job)

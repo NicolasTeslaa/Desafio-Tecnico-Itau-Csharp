@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
+    <RunSettingsFilePath>$(MSBuildThisFileDirectory)..\..\coverage.runsettings</RunSettingsFilePath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +30,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove=".tmpbuild\**\*.cs" />
+    <Compile Remove="TestResults\**\*.cs" />
+    <None Remove=".tmpbuild\**" />
+    <None Remove="TestResults\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ClassLibrary\ClassLibrary.csproj" />
     <ProjectReference Include="..\..\ScheduledPurchaseEngineService\ScheduledPurchaseEngineService.csproj" />
   </ItemGroup>
 

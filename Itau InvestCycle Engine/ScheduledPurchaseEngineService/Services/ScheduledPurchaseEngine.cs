@@ -45,9 +45,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         var historicoRepo = _uow.Repository<MotorExecucaoHistorico>();
 
         if (!_tradingCalendar.IsPurchaseDate(referenceDate))
-        {
             throw new InvalidOperationException("DATA_EXECUCAO_INVALIDA");
-        }
 
         var execucao = await StartExecutionAsync(execucoesRepo, referenceDate, ct);
 
@@ -131,6 +129,17 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
             .Where(x => tickers.Contains(x.Ticker.Trim().ToUpperInvariant()))
             .ToDictionary(x => x.Ticker.Trim().ToUpperInvariant(), x => x);
 
+        var ordensMasterPendentes = await ordensRepo.Query()
+            .Where(x => x.ContaMasterId == contaMaster.Id)
+            .OrderBy(x => x.DataExecucao)
+            .ThenBy(x => x.Id)
+            .ToListAsync(ct);
+
+        var ordensMasterPorTicker = ordensMasterPendentes
+            .GroupBy(x => NormalizeOrderTicker(x.Ticker))
+            .Where(g => tickers.Contains(g.Key))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         var orders = new List<OrderSummary>();
         var distributions = new List<ClientDistributionSummary>();
         var residuals = new List<ResidualSummary>();
@@ -158,6 +167,18 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
 
                 var saldoMasterAnterior = masterCustodiaByTicker.TryGetValue(ticker, out var custMaster) ? custMaster.Quantidade : 0;
                 var qtyComprar = Math.Max(qtyAlvo - saldoMasterAnterior, 0);
+                if (!ordensMasterPorTicker.TryGetValue(ticker, out var ordensOrigemTicker))
+                {
+                    ordensOrigemTicker = [];
+                    ordensMasterPorTicker[ticker] = ordensOrigemTicker;
+                }
+
+                ReconcileTrackedAvailability(ordensOrigemTicker, saldoMasterAnterior);
+                var saldoRastreado = ordensOrigemTicker.Sum(x => x.QuantidadeDisponivel);
+                if (saldoRastreado < saldoMasterAnterior)
+                {
+                    throw new InvalidOperationException($"SALDO_MASTER_SEM_ORIGEM:{ticker}");
+                }
 
                 if (qtyComprar > 0)
                 {
@@ -166,31 +187,37 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
 
                     if (qtyLote > 0)
                     {
-                        await ordensRepo.AddAsync(new OrdensCompra
+                        var ordemLote = new OrdensCompra
                         {
                             ContaMasterId = contaMaster.Id,
                             Ticker = ticker,
                             Quantidade = qtyLote,
+                            QuantidadeDisponivel = qtyLote,
                             PrecoUnitario = quote,
                             TipoMercado = TipoMercado.LOTE,
                             DataExecucao = DateTime.UtcNow,
-                        }, ct);
+                        };
 
+                        await ordensRepo.AddAsync(ordemLote, ct);
+                        ordensOrigemTicker.Add(ordemLote);
                         orders.Add(new OrderSummary(ticker, qtyLote, quote, TipoMercado.LOTE));
                     }
 
                     if (qtyFracionario > 0)
                     {
-                        await ordensRepo.AddAsync(new OrdensCompra
+                        var ordemFracionaria = new OrdensCompra
                         {
                             ContaMasterId = contaMaster.Id,
-                            Ticker = ticker,
+                            Ticker = $"{ticker}F",
                             Quantidade = qtyFracionario,
+                            QuantidadeDisponivel = qtyFracionario,
                             PrecoUnitario = quote,
                             TipoMercado = TipoMercado.FRACIONARIO,
                             DataExecucao = DateTime.UtcNow,
-                        }, ct);
+                        };
 
+                        await ordensRepo.AddAsync(ordemFracionaria, ct);
+                        ordensOrigemTicker.Add(ordemFracionaria);
                         orders.Add(new OrderSummary(ticker, qtyFracionario, quote, TipoMercado.FRACIONARIO));
                     }
                 }
@@ -216,35 +243,59 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
 
                     if (custodiaCliente is null)
                     {
-                        await custodiasRepo.AddAsync(new Custodias
+                        custodiaCliente = new Custodias
                         {
                             ContasGraficasId = contaCliente.Id,
                             Ticker = ticker,
                             Quantidade = qtyCliente,
                             PrecoMedio = quote,
                             DataUltimaAtualizacao = DateTime.UtcNow,
-                        }, ct);
+                        };
+
+                        await custodiasRepo.AddAsync(custodiaCliente, ct);
                     }
                     else
                     {
                         var qtdAnterior = custodiaCliente.Quantidade;
                         var qtdNova = qtdAnterior + qtyCliente;
                         if (qtdNova > 0)
-                        {
                             custodiaCliente.PrecoMedio = Math.Round(((qtdAnterior * custodiaCliente.PrecoMedio) + (qtyCliente * quote)) / qtdNova, 6);
-                        }
 
                         custodiaCliente.Quantidade = qtdNova;
                         custodiaCliente.DataUltimaAtualizacao = DateTime.UtcNow;
                         custodiasRepo.Update(custodiaCliente);
                     }
 
-                    await distribuicoesRepo.AddAsync(new Distribuicoes
+                    var dataDistribuicao = DateTime.UtcNow;
+                    var qtyRestanteDistribuicao = qtyCliente;
+
+                    while (qtyRestanteDistribuicao > 0)
                     {
-                        Ticker = ticker,
-                        Valor = Math.Round(qtyCliente * quote, 2),
-                        Data = DateTime.UtcNow,
-                    }, ct);
+                        var ordemOrigem = ordensOrigemTicker.FirstOrDefault(x => x.QuantidadeDisponivel > 0);
+                        if (ordemOrigem is null)
+                            break;
+
+                        var qtyAlocada = Math.Min(qtyRestanteDistribuicao, ordemOrigem.QuantidadeDisponivel);
+
+                        await distribuicoesRepo.AddAsync(new Distribuicoes
+                        {
+                            OrdemCompra = ordemOrigem,
+                            CustodiaFilhote = custodiaCliente,
+                            Ticker = ticker,
+                            Quantidade = qtyAlocada,
+                            PrecoUnitario = ordemOrigem.PrecoUnitario,
+                            Valor = Math.Round(qtyAlocada * ordemOrigem.PrecoUnitario, 2),
+                            DataDistribuicao = dataDistribuicao,
+                        }, ct);
+
+                        qtyRestanteDistribuicao -= qtyAlocada;
+                        ordemOrigem.QuantidadeDisponivel -= qtyAlocada;
+                        if (ordemOrigem.Id > 0)
+                            ordensRepo.Update(ordemOrigem);
+                    }
+
+                    if (qtyRestanteDistribuicao > 0)
+                        throw new InvalidOperationException($"DISTRIBUICAO_SEM_LASTRO:{ticker}");
 
                     var valorOperacao = Math.Round(qtyCliente * quote, 2);
                     var valorIr = Math.Round(valorOperacao * 0.00005m, 2);
@@ -287,9 +338,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
                     var qtyPosCompra = baseQty + qtyComprar;
 
                     if (qtyPosCompra > 0 && qtyComprar > 0)
-                    {
                         custMaster.PrecoMedio = Math.Round(((baseQty * custMaster.PrecoMedio) + (qtyComprar * quote)) / qtyPosCompra, 6);
-                    }
 
                     custMaster.Quantidade = saldoMasterFinal;
                     custMaster.DataUltimaAtualizacao = DateTime.UtcNow;
@@ -349,9 +398,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         if (existing is not null)
         {
             if (existing.Status is "SUCCESS" or "PENDING")
-            {
                 throw new InvalidOperationException("COMPRA_JA_EXECUTADA");
-            }
 
             await _uow.BeginAsync(ct);
             existing.Status = "PENDING";
@@ -442,13 +489,9 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
             try
             {
                 if (evt.Tipo == TipoIR.DEDO_DURO)
-                {
-                    await _publisher.PublishIrDedoDuroAsync(evt, pending.Cpf, pending.Ticker, ct);
-                }
+                    await _publisher.PublishIrDedoDuroAsync(evt, pending.Cpf, pending.Ticker!, ct);
                 else
-                {
-                    await _publisher.PublishIrVendaAsync(evt, pending.Cpf, pending.Ticker, ct);
-                }
+                    await _publisher.PublishIrVendaAsync(evt, pending.Cpf, pending.IrVendaPayload!, ct);
 
                 await _uow.BeginAsync(ct);
                 evt.PublicadoKafka = true;
@@ -466,7 +509,11 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         return published;
     }
 
-    private sealed record PendingIrEvent(EventosIR Event, string Cpf, string Ticker);
+    private sealed record PendingIrEvent(
+        EventosIR Event,
+        string Cpf,
+        string? Ticker = null,
+        IrVendaKafkaPayload? IrVendaPayload = null);
 
     private async Task<ContasGraficas> EnsureMasterAccountAsync(
         IRepository<Clientes> clientesRepo,
@@ -475,11 +522,10 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
     {
         var contaMaster = await contasRepo.Query().FirstOrDefaultAsync(x => x.Tipo == TipoConta.Master, ct);
         if (contaMaster is not null)
-        {
             return contaMaster;
-        }
 
         var masterCliente = await clientesRepo.Query().FirstOrDefaultAsync(x => x.CPF == "99999999999", ct);
+       
         if (masterCliente is null)
         {
             masterCliente = new Clientes
@@ -548,6 +594,28 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         }
 
         return map;
+    }
+
+    private static string NormalizeOrderTicker(string ticker)
+    {
+        var normalized = ticker.Trim().ToUpperInvariant();
+        return normalized.EndsWith('F') ? normalized[..^1] : normalized;
+    }
+
+    private static void ReconcileTrackedAvailability(List<OrdensCompra> orders, int saldoMasterAnterior)
+    {
+        var restante = saldoMasterAnterior;
+
+        for (var i = orders.Count - 1; i >= 0; i--)
+        {
+            var ordem = orders[i];
+            var quantidadeDisponivel = restante > 0
+                ? Math.Min(restante, ordem.Quantidade)
+                : 0;
+
+            ordem.QuantidadeDisponivel = quantidadeDisponivel;
+            restante -= quantidadeDisponivel;
+        }
     }
 
 }

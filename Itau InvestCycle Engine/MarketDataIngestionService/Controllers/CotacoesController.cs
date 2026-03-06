@@ -1,5 +1,6 @@
 using Itau.InvestCycleEngine.Contracts.Common;
 using MarketDataIngestionService.Interfaces;
+using MarketDataIngestionService.Support;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MarketDataIngestionService.Controllers;
@@ -58,6 +59,8 @@ public sealed class CotacoesController : ControllerBase
     [Consumes("multipart/form-data")]
     [DisableRequestSizeLimit]
     [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
+    [ProducesResponseType(typeof(IngestStartResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> IngestFile(
         [FromForm] IngestFileRequest request,
         CancellationToken ct)
@@ -66,11 +69,9 @@ public sealed class CotacoesController : ControllerBase
             return BadRequest("File is empty.");
 
         var file = request.File;
-        var uploadsDir = Path.Combine(AppContext.BaseDirectory, "uploads");
-        Directory.CreateDirectory(uploadsDir);
-
-        var jobFileName = $"{Guid.NewGuid():N}_{Sanitize(file.FileName)}";
-        var filePath = Path.Combine(uploadsDir, jobFileName);
+        var cotacoesDir = ProjectPaths.GetCotacoesDirectory();
+        var storedFileName = Sanitize(Path.GetFileName(file.FileName));
+        var filePath = Path.Combine(cotacoesDir, storedFileName);
 
         await using (var stream = file.OpenReadStream())
         await using (var target = System.IO.File.Create(filePath))
@@ -81,7 +82,7 @@ public sealed class CotacoesController : ControllerBase
         var response = await _ingestJobService.EnqueueAsync(filePath, file.FileName, ct);
         _logger.LogInformation("Novo job de ingestao enfileirado: {JobId} para arquivo {File}", response.JobId, response.File);
 
-        return Accepted(response);
+        return Ok(response);
     }
 
     [HttpGet("ingest/{jobId:guid}")]

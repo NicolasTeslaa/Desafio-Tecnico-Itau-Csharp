@@ -17,6 +17,7 @@ namespace ClassLibrary.Domain.Entities.CompraDistribuicao
         [MaxLength(10)]
         public string Ticker { get; set; }
         public int Quantidade { get; set; }
+        public int QuantidadeDisponivel { get; set; }
         public decimal PrecoUnitario { get; set; }
         public TipoMercado TipoMercado { get; set; }
         public DateTime DataExecucao { get; set; }

@@ -16,5 +16,6 @@
   <Project Path="ClassLibrary/ClassLibrary.csproj" />
   <Project Path="MarketDataIngestionService/MarketDataIngestionService.csproj" />
   <Project Path="ScheduledPurchaseEngineService/ScheduledPurchaseEngineService.csproj" />
+  <Project Path="tests/MarketDataIngestionService.Tests/MarketDataIngestionService.Tests.csproj" />
   <Project Path="tests/ScheduledPurchaseEngineService.Tests/ScheduledPurchaseEngineService.Tests.csproj" />
 </Solution>

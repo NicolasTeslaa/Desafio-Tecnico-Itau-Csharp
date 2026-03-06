@@ -46,6 +46,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+UseRequestIdHeader(app);
 UseSanitizedExceptionHandling(app);
 
 await EnsureMarketDataSchemaAsync(app.Services, app.Logger);
@@ -69,6 +70,20 @@ app.MapControllers();
 
 app.Run();
 
+static void UseRequestIdHeader(WebApplication app)
+{
+    app.Use(async (context, next) =>
+    {
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers["X-Request-Id"] = context.TraceIdentifier;
+            return Task.CompletedTask;
+        });
+
+        await next();
+    });
+}
+
 static void UseSanitizedExceptionHandling(WebApplication app)
 {
     app.UseExceptionHandler(errorApp =>
@@ -90,6 +105,7 @@ static void UseSanitizedExceptionHandling(WebApplication app)
 
             context.Response.StatusCode = statusCode;
             context.Response.ContentType = "application/json";
+            context.Response.Headers["X-Request-Id"] = traceId;
             await context.Response.WriteAsJsonAsync(new
             {
                 code = errorCode,

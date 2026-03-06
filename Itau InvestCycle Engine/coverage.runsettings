@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <ExcludeByFile>
+            **/Migrations/*.cs,
+            **/Program.cs,
+            **/ClassLibrary/Common/**/*.cs,
+            **/ClassLibrary/Contracts/**/*.cs,
+            **/ClassLibrary/Domain/Entities/Asset.cs,
+            **/ClassLibrary/Domain/Entities/Cotacoes.cs,
+            **/ClassLibrary/Domain/Entities/IngestaoJob.cs,
+            **/ClassLibrary/Domain/Entities/InvestmentAccount.cs,
+            **/ClassLibrary/Domain/Entities/MotorExecucao.cs,
+            **/ClassLibrary/Domain/Entities/MotorExecucaoHistorico.cs,
+            **/ClassLibrary/Domain/Entities/PlanExecution.cs,
+            **/ClassLibrary/Domain/Entities/PlanSchedule.cs,
+            **/ClassLibrary/Domain/Entities/ProgrammedPurchasePlan.cs,
+            **/ClassLibrary/Domain/Entities/CestasRecomendacao/*.cs,
+            **/ClassLibrary/Domain/Entities/Clientes/*.cs,
+            **/ClassLibrary/Domain/Entities/CompraDistribuicao/*.cs,
+            **/ClassLibrary/Domain/Entities/RebalanceamentoIR/*.cs,
+            **/ScheduledPurchaseEngineService/Data/DbContextFactory.cs,
+            **/MarketDataIngestionService/Data/DbContextFactory.cs
+          </ExcludeByFile>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
