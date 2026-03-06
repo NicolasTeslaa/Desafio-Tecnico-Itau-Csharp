@@ -315,6 +315,172 @@ public sealed class ScheduledPurchaseEngineTests
         Assert.Equal(0, ordemAposSegundaExecucao.QuantidadeDisponivel);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_UsesBasketVigenteNaDataReferencia_EmExecucaoManualRetroativa()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<ScheduledPurchaseDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        await using var db = new ScheduledPurchaseDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var cestaFevereiro = new CestasRecomendacao
+        {
+            Nome = "Top Five - Fevereiro",
+            Ativa = false,
+            DataCriacao = new DateTime(2026, 2, 1, 9, 0, 0, DateTimeKind.Utc),
+            DataDesativacao = new DateTime(2026, 3, 6, 9, 0, 0, DateTimeKind.Utc)
+        };
+
+        var cestaMarco = new CestasRecomendacao
+        {
+            Nome = "Top Five - Marco",
+            Ativa = true,
+            DataCriacao = new DateTime(2026, 3, 6, 9, 0, 0, DateTimeKind.Utc),
+            DataDesativacao = null
+        };
+
+        db.CestasRecomendacao.AddRange(cestaFevereiro, cestaMarco);
+        await db.SaveChangesAsync();
+
+        db.ItensCesta.AddRange(
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "AGRO3", Percentual = 90m },
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "BAHI3", Percentual = 1m },
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "BBSE3", Percentual = 1m },
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "ITUB4", Percentual = 1m },
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "PETR4", Percentual = 7m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "AGRO3", Percentual = 20m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "BAHI3", Percentual = 20m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "BBSE3", Percentual = 20m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "ITUB4", Percentual = 20m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "PETR4", Percentual = 20m });
+
+        db.Clientes.Add(new Clientes
+        {
+            Nome = "Cliente Retroativo",
+            CPF = "12345678909",
+            Email = "retroativo@teste.com",
+            ValorMensal = 3000m,
+            Ativo = true,
+            DataAdesao = new DateTime(2026, 2, 1, 9, 0, 0, DateTimeKind.Utc)
+        });
+
+        db.Cotacoes.AddRange(
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 5), Ticker = "AGRO3", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m },
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 5), Ticker = "BAHI3", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m },
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 5), Ticker = "BBSE3", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m },
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 5), Ticker = "ITUB4", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m },
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 5), Ticker = "PETR4", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m });
+
+        await db.SaveChangesAsync();
+
+        var service = new ScheduledPurchaseEngine(
+            new UnitOfWork(db),
+            new AlwaysOpenTradingCalendar(),
+            new NoOpFinanceEventsPublisher(),
+            NullLogger<ScheduledPurchaseEngine>.Instance);
+
+        await service.ExecuteAsync(new DateOnly(2026, 3, 5));
+
+        var ordens = await db.OrdensCompra
+            .OrderBy(x => x.Ticker)
+            .ToListAsync();
+
+        Assert.Equal(5, ordens.Count);
+        Assert.Contains(ordens, x => x.Ticker == "AGRO3F" && x.Quantidade == 90);
+        Assert.Contains(ordens, x => x.Ticker == "BAHI3F" && x.Quantidade == 1);
+        Assert.Contains(ordens, x => x.Ticker == "BBSE3F" && x.Quantidade == 1);
+        Assert.Contains(ordens, x => x.Ticker == "ITUB4F" && x.Quantidade == 1);
+        Assert.Contains(ordens, x => x.Ticker == "PETR4F" && x.Quantidade == 7);
+        Assert.DoesNotContain(ordens, x => x.Quantidade == 20);
+        Assert.All(ordens, ordem => Assert.EndsWith("F", ordem.Ticker));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UsesNovaBasketNaDataEmQueElaPassaAViger()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<ScheduledPurchaseDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        await using var db = new ScheduledPurchaseDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var cestaFevereiro = new CestasRecomendacao
+        {
+            Nome = "Top Five - Fevereiro",
+            Ativa = false,
+            DataCriacao = new DateTime(2026, 2, 1, 9, 0, 0, DateTimeKind.Utc),
+            DataDesativacao = new DateTime(2026, 3, 1, 9, 0, 0, DateTimeKind.Utc)
+        };
+
+        var cestaMarco = new CestasRecomendacao
+        {
+            Nome = "Top Five - Marco",
+            Ativa = true,
+            DataCriacao = new DateTime(2026, 3, 1, 9, 0, 0, DateTimeKind.Utc),
+            DataDesativacao = null
+        };
+
+        db.CestasRecomendacao.AddRange(cestaFevereiro, cestaMarco);
+        await db.SaveChangesAsync();
+
+        db.ItensCesta.AddRange(
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "AGRO3", Percentual = 90m },
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "BAHI3", Percentual = 1m },
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "BBSE3", Percentual = 1m },
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "ITUB4", Percentual = 1m },
+            new ItensCesta { CestaId = cestaFevereiro.Id, Ticker = "PETR4", Percentual = 7m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "AGRO3", Percentual = 20m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "BAHI3", Percentual = 20m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "BBSE3", Percentual = 20m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "ITUB4", Percentual = 20m },
+            new ItensCesta { CestaId = cestaMarco.Id, Ticker = "PETR4", Percentual = 20m });
+
+        db.Clientes.Add(new Clientes
+        {
+            Nome = "Cliente Vigencia",
+            CPF = "12345678910",
+            Email = "vigencia@teste.com",
+            ValorMensal = 3000m,
+            Ativo = true,
+            DataAdesao = new DateTime(2026, 2, 1, 9, 0, 0, DateTimeKind.Utc)
+        });
+
+        db.Cotacoes.AddRange(
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 1), Ticker = "AGRO3", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m },
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 1), Ticker = "BAHI3", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m },
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 1), Ticker = "BBSE3", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m },
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 1), Ticker = "ITUB4", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m },
+            new Cotacoes { DataPregao = new DateTime(2026, 3, 1), Ticker = "PETR4", PrecoAbertura = 10m, PrecoFechamento = 10m, PrecoMaximo = 10m, PrecoMinimo = 10m });
+
+        await db.SaveChangesAsync();
+
+        var service = new ScheduledPurchaseEngine(
+            new UnitOfWork(db),
+            new AlwaysOpenTradingCalendar(),
+            new NoOpFinanceEventsPublisher(),
+            NullLogger<ScheduledPurchaseEngine>.Instance);
+
+        await service.ExecuteAsync(new DateOnly(2026, 3, 1));
+
+        var ordens = await db.OrdensCompra
+            .OrderBy(x => x.Ticker)
+            .ToListAsync();
+
+        Assert.Equal(5, ordens.Count);
+        Assert.All(ordens, ordem => Assert.Equal(20, ordem.Quantidade));
+        Assert.All(ordens, ordem => Assert.EndsWith("F", ordem.Ticker));
+        Assert.DoesNotContain(ordens, x => x.Ticker == "AGRO3F" && x.Quantidade == 90);
+    }
+
     private sealed class AlwaysOpenTradingCalendar : ITradingCalendar
     {
         public bool IsBusinessDay(DateOnly date) => true;

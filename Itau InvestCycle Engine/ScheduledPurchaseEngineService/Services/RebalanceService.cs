@@ -144,9 +144,15 @@ public sealed class RebalanceService : IRebalanceService
                         valorVenda,
                         now), ct);
 
-                    await PersistedStructureSync.RemovePrecoMedioAsync(precosMediosRepo, custodia, ct);
-                    custodiasRepo.Remove(custodia);
-                    custodiasByTicker.Remove(tickerVendido);
+                    custodia.Quantidade = 0;
+                    custodia.DataUltimaAtualizacao = now;
+                    custodiasRepo.Update(custodia);
+                    await PersistedStructureSync.UpsertPrecoMedioAsync(
+                        precosMediosRepo,
+                        custodia,
+                        custodia.PrecoMedio,
+                        custodia.DataUltimaAtualizacao,
+                        ct);
                     houveMovimentacao = true;
                 }
 
@@ -214,9 +220,14 @@ public sealed class RebalanceService : IRebalanceService
 
                         if (custodiaAtual.Quantidade <= 0)
                         {
-                            await PersistedStructureSync.RemovePrecoMedioAsync(precosMediosRepo, custodiaAtual, ct);
-                            custodiasRepo.Remove(custodiaAtual);
-                            custodiasByTicker.Remove(ticker);
+                            custodiaAtual.Quantidade = 0;
+                            custodiasRepo.Update(custodiaAtual);
+                            await PersistedStructureSync.UpsertPrecoMedioAsync(
+                                precosMediosRepo,
+                                custodiaAtual,
+                                custodiaAtual.PrecoMedio,
+                                custodiaAtual.DataUltimaAtualizacao,
+                                ct);
                         }
                         else
                         {
@@ -518,9 +529,14 @@ public sealed class RebalanceService : IRebalanceService
                     custodia.DataUltimaAtualizacao = now;
                     if (custodia.Quantidade <= 0)
                     {
-                        await PersistedStructureSync.RemovePrecoMedioAsync(precosMediosRepo, custodia, ct);
-                        custodiasRepo.Remove(custodia);
-                        holdings.Remove(ticker);
+                        custodia.Quantidade = 0;
+                        custodiasRepo.Update(custodia);
+                        await PersistedStructureSync.UpsertPrecoMedioAsync(
+                            precosMediosRepo,
+                            custodia,
+                            custodia.PrecoMedio,
+                            custodia.DataUltimaAtualizacao,
+                            ct);
                     }
                     else
                     {

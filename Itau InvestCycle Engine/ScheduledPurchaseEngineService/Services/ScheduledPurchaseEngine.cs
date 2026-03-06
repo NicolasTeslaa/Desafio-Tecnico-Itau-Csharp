@@ -79,18 +79,15 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
                 0);
         }
 
-        var cestaAtiva = await cestasRepo.Query()
-            .Where(x => x.Ativa)
-            .OrderByDescending(x => x.DataCriacao)
-            .FirstOrDefaultAsync(ct);
+        var cestaVigente = await GetBasketForReferenceDateAsync(cestasRepo, referenceDate, ct);
 
-        if (cestaAtiva is null)
+        if (cestaVigente is null)
         {
             throw new InvalidOperationException("CESTA_NAO_ENCONTRADA");
         }
 
         var itensCesta = await itensCestaRepo.Query()
-            .Where(x => x.CestaId == cestaAtiva.Id)
+            .Where(x => x.CestaId == cestaVigente.Id)
             .OrderBy(x => x.Ticker)
             .ToListAsync(ct);
 
@@ -638,6 +635,21 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
             ordem.QuantidadeDisponivel = quantidadeDisponivel;
             restante -= quantidadeDisponivel;
         }
+    }
+
+    private static Task<CestasRecomendacao?> GetBasketForReferenceDateAsync(
+        IRepository<CestasRecomendacao> repo,
+        DateOnly referenceDate,
+        CancellationToken ct)
+    {
+        var nextDayStart = referenceDate.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+        return repo.Query()
+            .Where(x =>
+                x.DataCriacao < nextDayStart &&
+                (x.DataDesativacao == null || x.DataDesativacao >= nextDayStart))
+            .OrderByDescending(x => x.DataCriacao)
+            .FirstOrDefaultAsync(ct);
     }
 
 }

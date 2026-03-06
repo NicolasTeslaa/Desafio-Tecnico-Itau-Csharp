@@ -392,6 +392,146 @@ public sealed class RebalanceServiceTests
         Assert.True(evento.PublicadoKafka);
     }
 
+    [Fact]
+    public async Task RebalanceByBasketChangeAsync_PreservesZeroQuantityCustody_WhenHistoryReferencesExist()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+
+        var options = new DbContextOptionsBuilder<ScheduledPurchaseDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        await using var db = new ScheduledPurchaseDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var agora = DateTime.UtcNow;
+
+        var cestaAnterior = new CestasRecomendacao
+        {
+            Nome = "Top Five A",
+            Ativa = false,
+            DataCriacao = agora.AddDays(-1),
+            DataDesativacao = agora
+        };
+
+        var cestaNova = new CestasRecomendacao
+        {
+            Nome = "Top Five B",
+            Ativa = true,
+            DataCriacao = agora
+        };
+
+        db.CestasRecomendacao.AddRange(cestaAnterior, cestaNova);
+        await db.SaveChangesAsync();
+
+        db.ItensCesta.AddRange(
+            new ItensCesta { CestaId = cestaAnterior.Id, Ticker = "PETR4", Percentual = 100m },
+            new ItensCesta { CestaId = cestaNova.Id, Ticker = "VALE3", Percentual = 100m });
+
+        var cliente = new Clientes
+        {
+            Nome = "Cliente Historico",
+            CPF = "12345678912",
+            Email = "historico@teste.com",
+            ValorMensal = 3000m,
+            Ativo = true,
+            DataAdesao = agora
+        };
+
+        db.Clientes.Add(cliente);
+        await db.SaveChangesAsync();
+
+        var conta = new ContasGraficas
+        {
+            ClienteId = cliente.Id,
+            NumeroConta = "FLH-000003",
+            Tipo = TipoConta.Filhote,
+            DataCriacao = agora
+        };
+
+        db.ContasGraficas.Add(conta);
+        await db.SaveChangesAsync();
+
+        var custodiaPetr4 = new Custodias
+        {
+            ContasGraficasId = conta.Id,
+            Ticker = "PETR4",
+            Quantidade = 100,
+            PrecoMedio = 10m,
+            DataUltimaAtualizacao = agora
+        };
+
+        db.Custodias.Add(custodiaPetr4);
+        await db.SaveChangesAsync();
+
+        var ordemMaster = new OrdensCompra
+        {
+            ContaMasterId = conta.Id,
+            Ticker = "PETR4",
+            Quantidade = 100,
+            QuantidadeDisponivel = 0,
+            PrecoUnitario = 10m,
+            TipoMercado = TipoMercado.LOTE,
+            DataExecucao = agora
+        };
+
+        db.OrdensCompra.Add(ordemMaster);
+        await db.SaveChangesAsync();
+
+        db.Distribuicoes.Add(new Distribuicoes
+        {
+            OrdemCompraId = ordemMaster.Id,
+            CustodiaFilhoteId = custodiaPetr4.Id,
+            Ticker = "PETR4",
+            Quantidade = 100,
+            PrecoUnitario = 10m,
+            Valor = 1000m,
+            DataDistribuicao = agora
+        });
+
+        db.Cotacoes.AddRange(
+            new Cotacoes
+            {
+                DataPregao = agora.Date,
+                Ticker = "PETR4",
+                PrecoAbertura = 30m,
+                PrecoFechamento = 30m,
+                PrecoMaximo = 30m,
+                PrecoMinimo = 30m
+            },
+            new Cotacoes
+            {
+                DataPregao = agora.Date,
+                Ticker = "VALE3",
+                PrecoAbertura = 30m,
+                PrecoFechamento = 30m,
+                PrecoMaximo = 30m,
+                PrecoMinimo = 30m
+            });
+
+        await db.SaveChangesAsync();
+
+        var uow = new UnitOfWork(db);
+        var service = new RebalanceService(
+            uow,
+            new NoOpFinanceEventsPublisher(),
+            NullLogger<RebalanceService>.Instance);
+
+        var clientesProcessados = await service.RebalanceByBasketChangeAsync(cestaAnterior.Id, cestaNova.Id);
+
+        Assert.Equal(1, clientesProcessados);
+
+        var custodiaPetr4Atualizada = await db.Custodias.SingleAsync(x => x.Id == custodiaPetr4.Id);
+        Assert.Equal(0, custodiaPetr4Atualizada.Quantidade);
+
+        var distribuicaoHistorica = await db.Distribuicoes.SingleAsync();
+        Assert.Equal(custodiaPetr4.Id, distribuicaoHistorica.CustodiaFilhoteId);
+
+        var custodiaVale3 = await db.Custodias.SingleAsync(x => x.ContasGraficasId == conta.Id && x.Ticker == "VALE3");
+        Assert.True(custodiaVale3.Quantidade > 0);
+    }
+
     private sealed class NoOpFinanceEventsPublisher : IFinanceEventsPublisher
     {
         public Task PublishIrDedoDuroAsync(EventosIR evt, string cpf, string ticker, CancellationToken ct = default)
