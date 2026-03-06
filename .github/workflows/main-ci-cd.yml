@@ -1,0 +1,99 @@
+name: Main CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: main-deploy
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run automated tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Itau InvestCycle Engine
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore ScheduledPurchaseEngineService tests
+        run: dotnet restore "./tests/ScheduledPurchaseEngineService.Tests/ScheduledPurchaseEngineService.Tests.csproj"
+
+      - name: Restore MarketDataIngestionService tests
+        run: dotnet restore "./tests/MarketDataIngestionService.Tests/MarketDataIngestionService.Tests.csproj"
+
+      - name: Test ScheduledPurchaseEngineService
+        run: dotnet test "./tests/ScheduledPurchaseEngineService.Tests/ScheduledPurchaseEngineService.Tests.csproj" --configuration Release --no-restore --verbosity minimal
+
+      - name: Test MarketDataIngestionService
+        run: dotnet test "./tests/MarketDataIngestionService.Tests/MarketDataIngestionService.Tests.csproj" --configuration Release --no-restore --verbosity minimal
+
+  deploy:
+    name: Deploy containers to VPS
+    runs-on: ubuntu-latest
+    needs: test
+    env:
+      SSH_PORT: "22"
+      REMOTE_ROOT: ${{ github.event.repository.name }}
+      REMOTE_APP_SUBDIR: Itau InvestCycle Engine
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install deployment dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass rsync
+
+      - name: Prepare remote directory
+        env:
+          HOST: ${{ secrets.HOST }}
+          USER: ${{ secrets.USER }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+        run: |
+          sshpass -p "$PASSWORD" ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no "$USER@$HOST" \
+            "mkdir -p \"\$HOME/$REMOTE_ROOT\""
+
+      - name: Sync repository to VPS
+        env:
+          HOST: ${{ secrets.HOST }}
+          USER: ${{ secrets.USER }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+        run: |
+          sshpass -p "$PASSWORD" rsync -az --delete \
+            --exclude ".git/" \
+            --exclude ".github/" \
+            --exclude ".vs/" \
+            --exclude ".serena/" \
+            --exclude "**/bin/" \
+            --exclude "**/obj/" \
+            --exclude "**/TestResults/" \
+            --exclude "Itau InvestCycle Engine/spa/node_modules/" \
+            --exclude "Itau InvestCycle Engine/artifacts/" \
+            -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=no" \
+            "$GITHUB_WORKSPACE/" "$USER@$HOST:~/$REMOTE_ROOT/"
+
+      - name: Build and start containers on VPS
+        env:
+          HOST: ${{ secrets.HOST }}
+          USER: ${{ secrets.USER }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+        run: |
+          sshpass -p "$PASSWORD" ssh -p "$SSH_PORT" -o StrictHostKeyChecking=no "$USER@$HOST" <<EOF
+          set -e
+          cd "\$HOME/$REMOTE_ROOT/$REMOTE_APP_SUBDIR"
+          mkdir -p cotacoes
+          export DEPLOY_HOST="$HOST"
+          export COMPOSE_PROJECT_NAME="investcycle"
+          docker compose -f docker-compose.vps.yml up -d --build --remove-orphans
+          docker compose -f docker-compose.vps.yml ps
+          EOF

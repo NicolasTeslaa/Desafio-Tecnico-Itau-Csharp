@@ -29,6 +29,7 @@ public sealed class RebalanceService : IRebalanceService
         var contasRepo = _uow.Repository<ContasGraficas>();
         var custodiasRepo = _uow.Repository<Custodias>();
         var cotacoesRepo = _uow.Repository<Cotacoes>();
+        var precosMediosRepo = _uow.Repository<PrecoMedio>();
         var rebalsRepo = _uow.Repository<Rebalanceamentos>();
         var eventosRepo = _uow.Repository<EventosIR>();
 
@@ -143,6 +144,7 @@ public sealed class RebalanceService : IRebalanceService
                         valorVenda,
                         now), ct);
 
+                    await PersistedStructureSync.RemovePrecoMedioAsync(precosMediosRepo, custodia, ct);
                     custodiasRepo.Remove(custodia);
                     custodiasByTicker.Remove(tickerVendido);
                     houveMovimentacao = true;
@@ -212,6 +214,7 @@ public sealed class RebalanceService : IRebalanceService
 
                         if (custodiaAtual.Quantidade <= 0)
                         {
+                            await PersistedStructureSync.RemovePrecoMedioAsync(precosMediosRepo, custodiaAtual, ct);
                             custodiasRepo.Remove(custodiaAtual);
                             custodiasByTicker.Remove(ticker);
                         }
@@ -283,6 +286,7 @@ public sealed class RebalanceService : IRebalanceService
                                 custExistente.Quantidade = qtdNova;
                                 custExistente.DataUltimaAtualizacao = now;
                                 custodiasRepo.Update(custExistente);
+                                await PersistedStructureSync.UpsertPrecoMedioAsync(precosMediosRepo, custExistente, custExistente.PrecoMedio, custExistente.DataUltimaAtualizacao, ct);
                             }
                             else
                             {
@@ -295,6 +299,7 @@ public sealed class RebalanceService : IRebalanceService
                                     DataUltimaAtualizacao = now
                                 };
                                 await custodiasRepo.AddAsync(nova, ct);
+                                await PersistedStructureSync.UpsertPrecoMedioAsync(precosMediosRepo, nova, nova.PrecoMedio, nova.DataUltimaAtualizacao, ct);
                                 custodiasByTicker[item.Ticker] = nova;
                             }
 
@@ -374,6 +379,7 @@ public sealed class RebalanceService : IRebalanceService
         var contasRepo = _uow.Repository<ContasGraficas>();
         var custodiasRepo = _uow.Repository<Custodias>();
         var cotacoesRepo = _uow.Repository<Cotacoes>();
+        var precosMediosRepo = _uow.Repository<PrecoMedio>();
         var rebalsRepo = _uow.Repository<Rebalanceamentos>();
         var eventosRepo = _uow.Repository<EventosIR>();
 
@@ -512,6 +518,7 @@ public sealed class RebalanceService : IRebalanceService
                     custodia.DataUltimaAtualizacao = now;
                     if (custodia.Quantidade <= 0)
                     {
+                        await PersistedStructureSync.RemovePrecoMedioAsync(precosMediosRepo, custodia, ct);
                         custodiasRepo.Remove(custodia);
                         holdings.Remove(ticker);
                     }
@@ -552,6 +559,7 @@ public sealed class RebalanceService : IRebalanceService
                                 custodia.Quantidade = qtdNova;
                                 custodia.DataUltimaAtualizacao = now;
                                 custodiasRepo.Update(custodia);
+                                await PersistedStructureSync.UpsertPrecoMedioAsync(precosMediosRepo, custodia, custodia.PrecoMedio, custodia.DataUltimaAtualizacao, ct);
                             }
                             else
                             {
@@ -564,6 +572,7 @@ public sealed class RebalanceService : IRebalanceService
                                     DataUltimaAtualizacao = now
                                 };
                                 await custodiasRepo.AddAsync(nova, ct);
+                                await PersistedStructureSync.UpsertPrecoMedioAsync(precosMediosRepo, nova, nova.PrecoMedio, nova.DataUltimaAtualizacao, ct);
                                 holdings[ticker] = nova;
                             }
 

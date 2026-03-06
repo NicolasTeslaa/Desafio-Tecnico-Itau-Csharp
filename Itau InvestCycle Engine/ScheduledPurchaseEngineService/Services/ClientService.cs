@@ -103,6 +103,7 @@ public sealed class ClientService : IClentService
         var custodiasRepo = _uow.Repository<Custodias>();
         var cestasRepo = _uow.Repository<CestasRecomendacao>();
         var itensCestaRepo = _uow.Repository<ItensCesta>();
+        var precosMediosRepo = _uow.Repository<PrecoMedio>();
         var now = DateTime.UtcNow;
 
         try
@@ -150,14 +151,17 @@ public sealed class ClientService : IClentService
 
                 foreach (var item in itens)
                 {
-                    await custodiasRepo.AddAsync(new Custodias
+                    var novaCustodia = new Custodias
                     {
                         ContasGraficasId = conta.Id,
                         Ticker = item.Ticker.Trim().ToUpperInvariant(),
                         Quantidade = 0,
                         PrecoMedio = 0m,
                         DataUltimaAtualizacao = now,
-                    }, ct);
+                    };
+
+                    await custodiasRepo.AddAsync(novaCustodia, ct);
+                    await PersistedStructureSync.UpsertPrecoMedioAsync(precosMediosRepo, novaCustodia, 0m, now, ct);
                 }
             }
 
@@ -420,11 +424,18 @@ public sealed class ClientService : IClentService
             }
 
             var cotacoesRepo = _uow.Repository<Cotacoes>();
+            var precosMediosRepo = _uow.Repository<PrecoMedio>();
 
             var tickers = custodias.Select(x => x.Ticker.Trim().ToUpperInvariant()).Distinct().ToList();
             var cotacoes = await cotacoesRepo.Query().AsNoTracking()
                 .Where(x => tickers.Contains(x.Ticker))
                 .ToListAsync(ct);
+
+            var custodiaIds = custodias.Select(x => x.Id).ToList();
+            var precoMedioMap = await precosMediosRepo.Query()
+                .AsNoTracking()
+                .Where(x => custodiaIds.Contains(x.CustodiaId))
+                .ToDictionaryAsync(x => x.CustodiaId, x => x.Valor, ct);
 
             var quoteMap = cotacoes
                 .GroupBy(x => x.Ticker)
@@ -435,11 +446,17 @@ public sealed class ClientService : IClentService
             foreach (var c in custodias)
             {
                 var ticker = c.Ticker.Trim().ToUpperInvariant();
-                var cotacaoAtual = quoteMap.TryGetValue(ticker, out var q) ? q.PrecoFechamento : c.PrecoMedio;
+                var precoMedio = precoMedioMap.TryGetValue(c.Id, out var valorPersistido) ? valorPersistido : c.PrecoMedio;
+                var cotacaoAtual = quoteMap.TryGetValue(ticker, out var q) ? q.PrecoFechamento : precoMedio;
                 var valorAtual = Math.Round(cotacaoAtual * c.Quantidade, 2);
-                var valorInvestido = Math.Round(c.PrecoMedio * c.Quantidade, 2);
+                var valorInvestido = Math.Round(precoMedio * c.Quantidade, 2);
                 var pl = valorAtual - valorInvestido;
                 var plPct = valorInvestido > 0m ? Math.Round((pl / valorInvestido) * 100m, 2) : 0m;
+
+                if (precoMedio != c.PrecoMedio)
+                {
+                    c.PrecoMedio = precoMedio;
+                }
 
                 linhas.Add((c, cotacaoAtual, valorAtual, valorInvestido, pl, plPct));
             }

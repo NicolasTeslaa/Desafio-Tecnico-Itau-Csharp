@@ -124,7 +124,7 @@ public sealed class AdminService : IAdminService
             var rebalanceamentoDisparado = cestaAnterior is not null;
             if (rebalanceamentoDisparado)
             {
-                await _rebalanceService.RebalanceByBasketChangeAsync(cestaAnterior.Id, novaCesta.Id, ct);
+                await _rebalanceService.RebalanceByBasketChangeAsync(cestaAnterior!.Id, novaCesta.Id, ct);
             }
 
             var tickersAnteriores = cestaAnteriorItens
@@ -336,15 +336,27 @@ public sealed class AdminService : IAdminService
 
     public async Task<Result<ContaMasterCustodiaResponse, ApiError>> ConsultarCustodiaMasterAsync(CancellationToken ct)
     {
+        var contaMasterRepo = _uow.Repository<ContaMaster>();
         var contasRepo = _uow.Repository<ContasGraficas>();
         var custodiasRepo = _uow.Repository<Custodias>();
         var cotacoesRepo = _uow.Repository<Cotacoes>();
         var ordensRepo = _uow.Repository<OrdensCompra>();
+        var precosMediosRepo = _uow.Repository<PrecoMedio>();
 
-        var contaMaster = await contasRepo.Query()
+        var contaMasterRegistro = await contaMasterRepo.Query()
             .AsNoTracking()
-            .Where(x => x.Tipo == TipoConta.Master)
+            .Include(x => x.ContaGrafica)
             .FirstOrDefaultAsync(ct);
+
+        var contaMaster = contaMasterRegistro?.ContaGrafica;
+
+        if (contaMaster is null)
+        {
+            contaMaster = await contasRepo.Query()
+                .AsNoTracking()
+                .Where(x => x.Tipo == TipoConta.Master)
+                .FirstOrDefaultAsync(ct);
+        }
 
         if (contaMaster is null)
         {
@@ -382,10 +394,17 @@ public sealed class AdminService : IAdminService
             .GroupBy(x => NormalizeOrderTicker(x.Ticker))
             .ToDictionary(g => g.Key, g => g.ToList());
 
+        var custodiaIds = custodias.Select(x => x.Id).ToList();
+        var precoMedioMap = await precosMediosRepo.Query()
+            .AsNoTracking()
+            .Where(x => custodiaIds.Contains(x.CustodiaId))
+            .ToDictionaryAsync(x => x.CustodiaId, x => x.Valor, ct);
+
         var custodiaResponse = custodias.Select(c =>
         {
             var ticker = c.Ticker.Trim().ToUpperInvariant();
-            var cotacaoAtual = cotacaoAtualPorTicker.TryGetValue(ticker, out var quote) ? quote : c.PrecoMedio;
+            var precoMedio = precoMedioMap.TryGetValue(c.Id, out var valorPersistido) ? valorPersistido : c.PrecoMedio;
+            var cotacaoAtual = cotacaoAtualPorTicker.TryGetValue(ticker, out var quote) ? quote : precoMedio;
             var valorAtual = Math.Round(cotacaoAtual * c.Quantidade, 2);
             var origem = ordensPendentesPorTicker.TryGetValue(ticker, out var ordensTicker) && ordensTicker.Count > 0
                 ? ordensTicker.Count == 1
@@ -396,7 +415,7 @@ public sealed class AdminService : IAdminService
             return new CustodiaMasterItemResponse(
                 Ticker: ticker,
                 Quantidade: c.Quantidade,
-                PrecoMedio: c.PrecoMedio,
+                PrecoMedio: precoMedio,
                 ValorAtual: valorAtual,
                 Origem: origem);
         }).ToList();

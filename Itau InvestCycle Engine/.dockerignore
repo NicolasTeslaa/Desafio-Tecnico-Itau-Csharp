@@ -1,0 +1,15 @@
+.git
+.github
+.serena
+.vs
+artifacts
+TestResults
+**/bin
+**/obj
+**/TestResults
+spa/node_modules
+spa/dist
+coverage
+coverage.*
+*.user
+*.suo

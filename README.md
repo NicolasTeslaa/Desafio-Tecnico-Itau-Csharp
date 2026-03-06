@@ -192,6 +192,26 @@ cotacoes/COTAHIST_D20260225.TXT
 
 O sistema utiliza a cotacao de fechamento do ultimo pregao disponivel para calculos de compra e para consultas historicas.
 
+## CI/CD
+
+O repositorio possui pipeline GitHub Actions em `.github/workflows/main-ci-cd.yml` com este fluxo:
+
+- a cada `push` na `main`, executa os testes automatizados
+- se os testes passarem, sincroniza o repositorio para a VPS via SSH na porta `22`
+- na VPS, executa `docker compose -f docker-compose.vps.yml up -d --build --remove-orphans`
+
+Secrets esperados no GitHub:
+
+- `HOST`
+- `USER`
+- `PASSWORD`
+
+Premissas da VPS:
+
+- Docker Engine e Docker Compose plugin instalados
+- acesso SSH por senha habilitado na porta `22`
+- permissao do usuario remoto para executar `docker compose`
+
 ## Testes
 
 Projetos de teste disponiveis:

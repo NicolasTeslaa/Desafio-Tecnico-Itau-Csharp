@@ -18,7 +18,9 @@ public sealed class ScheduledPurchaseDbContext : DbContext
     public DbSet<Clientes> Clientes => Set<Clientes>();
     public DbSet<ClienteValorMensalHistorico> ClienteValorMensalHistorico => Set<ClienteValorMensalHistorico>();
     public DbSet<ContasGraficas> ContasGraficas => Set<ContasGraficas>();
+    public DbSet<ContaMaster> ContaMaster => Set<ContaMaster>();
     public DbSet<Custodias> Custodias => Set<Custodias>();
+    public DbSet<PrecoMedio> PrecosMedios => Set<PrecoMedio>();
     public DbSet<Distribuicoes> Distribuicoes => Set<Distribuicoes>();
     public DbSet<OrdensCompra> OrdensCompra => Set<OrdensCompra>();
     public DbSet<EventosIR> EventosIR => Set<EventosIR>();
@@ -101,6 +103,20 @@ public sealed class ScheduledPurchaseDbContext : DbContext
                 .HasDatabaseName("ux_numeroConta_contas");
         });
 
+        modelBuilder.Entity<ContaMaster>(e =>
+        {
+            e.ToTable("conta_master");
+
+            e.HasOne(x => x.ContaGrafica)
+                .WithMany()
+                .HasForeignKey(x => x.ContaGraficaId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasIndex(x => x.ContaGraficaId)
+                .IsUnique()
+                .HasDatabaseName("ux_conta_master_contagrafica");
+        });
+
         modelBuilder.Entity<Custodias>(e =>
         {
             e.ToTable("custodias");
@@ -111,6 +127,21 @@ public sealed class ScheduledPurchaseDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.ContasGraficasId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PrecoMedio>(e =>
+        {
+            e.ToTable("precos_medios");
+            e.Property(x => x.Valor).HasPrecision(18, 6);
+
+            e.HasOne(x => x.Custodia)
+                .WithMany()
+                .HasForeignKey(x => x.CustodiaId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasIndex(x => x.CustodiaId)
+                .IsUnique()
+                .HasDatabaseName("ux_precos_medios_custodia");
         });
 
         modelBuilder.Entity<Distribuicoes>(e =>

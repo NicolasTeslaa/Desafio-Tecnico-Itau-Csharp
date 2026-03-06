@@ -34,10 +34,12 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
     {
         var clientesRepo = _uow.Repository<Clientes>();
         var contasRepo = _uow.Repository<ContasGraficas>();
+        var contaMasterRepo = _uow.Repository<ContaMaster>();
         var cestasRepo = _uow.Repository<CestasRecomendacao>();
         var itensCestaRepo = _uow.Repository<ItensCesta>();
         var cotacoesRepo = _uow.Repository<Cotacoes>();
         var custodiasRepo = _uow.Repository<Custodias>();
+        var precosMediosRepo = _uow.Repository<PrecoMedio>();
         var ordensRepo = _uow.Repository<OrdensCompra>();
         var distribuicoesRepo = _uow.Repository<Distribuicoes>();
         var eventosIrRepo = _uow.Repository<EventosIR>();
@@ -253,6 +255,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
                         };
 
                         await custodiasRepo.AddAsync(custodiaCliente, ct);
+                        await PersistedStructureSync.UpsertPrecoMedioAsync(precosMediosRepo, custodiaCliente, custodiaCliente.PrecoMedio, custodiaCliente.DataUltimaAtualizacao, ct);
                     }
                     else
                     {
@@ -264,6 +267,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
                         custodiaCliente.Quantidade = qtdNova;
                         custodiaCliente.DataUltimaAtualizacao = DateTime.UtcNow;
                         custodiasRepo.Update(custodiaCliente);
+                        await PersistedStructureSync.UpsertPrecoMedioAsync(precosMediosRepo, custodiaCliente, custodiaCliente.PrecoMedio, custodiaCliente.DataUltimaAtualizacao, ct);
                     }
 
                     var dataDistribuicao = DateTime.UtcNow;
@@ -328,6 +332,7 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
                         };
 
                         await custodiasRepo.AddAsync(novaCustodiaMaster, ct);
+                        await PersistedStructureSync.UpsertPrecoMedioAsync(precosMediosRepo, novaCustodiaMaster, novaCustodiaMaster.PrecoMedio, novaCustodiaMaster.DataUltimaAtualizacao, ct);
                         masterCustodiaByTicker[ticker] = novaCustodiaMaster;
                         residuals.Add(new ResidualSummary(ticker, saldoMasterFinal));
                     }
@@ -345,11 +350,13 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
 
                     if (saldoMasterFinal <= 0)
                     {
+                        await PersistedStructureSync.RemovePrecoMedioAsync(precosMediosRepo, custMaster, ct);
                         custodiasRepo.Remove(custMaster);
                     }
                     else
                     {
                         custodiasRepo.Update(custMaster);
+                        await PersistedStructureSync.UpsertPrecoMedioAsync(precosMediosRepo, custMaster, custMaster.PrecoMedio, custMaster.DataUltimaAtualizacao, ct);
                         residuals.Add(new ResidualSummary(ticker, saldoMasterFinal));
                     }
                 }
@@ -520,9 +527,22 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
         IRepository<ContasGraficas> contasRepo,
         CancellationToken ct)
     {
+        var contaMasterRepo = _uow.Repository<ContaMaster>();
+        var contaMasterPersistida = await contaMasterRepo.Query()
+            .Include(x => x.ContaGrafica)
+            .FirstOrDefaultAsync(ct);
+
+        if (contaMasterPersistida?.ContaGrafica is not null)
+            return contaMasterPersistida.ContaGrafica;
+
         var contaMaster = await contasRepo.Query().FirstOrDefaultAsync(x => x.Tipo == TipoConta.Master, ct);
         if (contaMaster is not null)
+        {
+            await _uow.BeginAsync(ct);
+            await PersistedStructureSync.EnsureContaMasterAsync(contaMasterRepo, contaMaster, ct);
+            await _uow.CommitAsync(ct);
             return contaMaster;
+        }
 
         var masterCliente = await clientesRepo.Query().FirstOrDefaultAsync(x => x.CPF == "99999999999", ct);
        
@@ -550,7 +570,9 @@ public sealed class ScheduledPurchaseEngine : IScheduledPurchaseEngine
             DataCriacao = DateTime.UtcNow,
         };
 
+        await _uow.BeginAsync(ct);
         await contasRepo.AddAsync(contaMaster, ct);
+        await PersistedStructureSync.EnsureContaMasterAsync(contaMasterRepo, contaMaster, ct);
         await _uow.CommitAsync(ct);
 
         return contaMaster;

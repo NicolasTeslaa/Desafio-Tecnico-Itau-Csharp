@@ -1,0 +1,107 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: investcycle-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345678
+      MYSQL_DATABASE: investCycle
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p12345678 --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: investcycle-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: investcycle-kafka-ui
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: investcycle
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    depends_on:
+      - kafka
+
+  frontend:
+    container_name: investcycle-frontend
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: spa/Dockerfile
+      args:
+        VITE_SCHEDULED_BASE_URL: http://${DEPLOY_HOST:-localhost}:5115
+        VITE_MARKETDATA_BASE_URL: http://${DEPLOY_HOST:-localhost}:5136
+    ports:
+      - "80:80"
+    depends_on:
+      - scheduled-purchase-engine-service
+      - market-data-ingestion-service
+
+  market-data-ingestion-service:
+    container_name: investcycle-market-data
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: MarketDataIngestionService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Cors__AllowedOrigins: http://${DEPLOY_HOST:-localhost},https://${DEPLOY_HOST:-localhost},http://${DEPLOY_HOST:-localhost}:80,https://${DEPLOY_HOST:-localhost}:443
+      ConnectionStrings__mysql: Server=mysql;Port=3306;Database=investCycle;Uid=root;Pwd=12345678;
+    ports:
+      - "5136:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  scheduled-purchase-engine-service:
+    container_name: investcycle-scheduled-purchase
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: ScheduledPurchaseEngineService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Cors__AllowedOrigins: http://${DEPLOY_HOST:-localhost},https://${DEPLOY_HOST:-localhost},http://${DEPLOY_HOST:-localhost}:80,https://${DEPLOY_HOST:-localhost}:443
+      ConnectionStrings__mysql: Server=mysql;Port=3306;Database=investCycle;Uid=root;Pwd=12345678;
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__IrDedoDuroTopic: ir-dedo-duro
+      Kafka__IrVendaTopic: ir-venda
+    ports:
+      - "5115:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+volumes:
+  kafka_data:
+  mysql_data:
