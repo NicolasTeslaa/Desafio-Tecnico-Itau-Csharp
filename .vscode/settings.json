@@ -1,0 +1,11 @@
+{
+  "mcp.servers": {
+    "serena-cli": {
+      "command": "serena-cli",
+      "args": [
+        "start-mcp-server"
+      ],
+      "env": {}
+    }
+  }
+}

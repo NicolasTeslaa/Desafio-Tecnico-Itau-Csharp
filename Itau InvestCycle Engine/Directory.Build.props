@@ -2,10 +2,20 @@
   <PropertyGroup>
     <!-- Use user temp to avoid locked/permissioned repo folders -->
     <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
-    <MSBuildProjectExtensionsPath>$(TEMP)\msbuild\$(MSBuildProjectName)\</MSBuildProjectExtensionsPath>
-    <BaseIntermediateOutputPath>$(MSBuildProjectExtensionsPath)\</BaseIntermediateOutputPath>
     <BaseOutputPath>$(MSBuildProjectDirectory)\..\artifacts\bin\$(MSBuildProjectName)\</BaseOutputPath>
     <!-- Ensure old obj/bin/artifacts folders are not globbed into Compile items -->
     <DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildProjectDirectory)\obj\**;$(MSBuildProjectDirectory)\bin\**;$(MSBuildProjectDirectory)\artifacts\**;$(MSBuildProjectDirectory)\.tmpbuild\**;$(MSBuildProjectDirectory)\TestResults\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <MSBuildProjectExtensionsPath>$(TEMP)\msbuild\$(MSBuildProjectName)\</MSBuildProjectExtensionsPath>
+    <BaseIntermediateOutputPath>$(MSBuildProjectExtensionsPath)\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <_TempRoot Condition="'$(TMPDIR)' != ''">$(TMPDIR)</_TempRoot>
+    <_TempRoot Condition="'$(_TempRoot)' == ''">/tmp/</_TempRoot>
+    <MSBuildProjectExtensionsPath>$(_TempRoot)msbuild/$(MSBuildProjectName)/</MSBuildProjectExtensionsPath>
+    <BaseIntermediateOutputPath>$(MSBuildProjectExtensionsPath)</BaseIntermediateOutputPath>
   </PropertyGroup>
 </Project>

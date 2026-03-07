@@ -5,7 +5,6 @@ using MarketDataIngestionService.Repositories;
 using MarketDataIngestionService.Services;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
-using System.Data;
 using System.Data.Common;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHealthChecks();
 
 builder.Services.AddMarketDataDbContext(builder.Configuration);
 
@@ -67,6 +67,7 @@ app.UseCors(); // usa DefaultPolicy
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();
 
@@ -127,13 +128,13 @@ static async Task EnsureMarketDataSchemaAsync(IServiceProvider services, ILogger
             using var scope = services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<MarketDataDbContext>();
 
-            await db.Database.MigrateAsync();
-
-            if (!await TableExistsAsync(db, "ingestao_jobs"))
+            var hasMigrations = db.Database.GetMigrations().Any();
+            if (!hasMigrations)
             {
-                logger.LogWarning("Tabela 'ingestao_jobs' ausente apos migrate. Criando tabela de seguranca.");
-                await CreateIngestaoJobsTableAsync(db);
+                throw new InvalidOperationException("Nenhuma migration encontrada para MarketDataDbContext.");
             }
+
+            await db.Database.MigrateAsync();
 
             logger.LogInformation("Schema do MarketData validado com sucesso.");
             return;
@@ -147,41 +148,3 @@ static async Task EnsureMarketDataSchemaAsync(IServiceProvider services, ILogger
 
     throw new InvalidOperationException("Nao foi possivel preparar o schema do MarketData apos multiplas tentativas.");
 }
-
-static async Task<bool> TableExistsAsync(MarketDataDbContext db, string tableName)
-{
-    await using var connection = db.Database.GetDbConnection();
-    if (connection.State != ConnectionState.Open)
-    {
-        await connection.OpenAsync();
-    }
-
-    await using var command = connection.CreateCommand();
-    command.CommandText = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = @tableName";
-
-    var parameter = command.CreateParameter();
-    parameter.ParameterName = "@tableName";
-    parameter.Value = tableName;
-    command.Parameters.Add(parameter);
-
-    var result = await command.ExecuteScalarAsync();
-    return Convert.ToInt32(result) > 0;
-}
-
-static Task CreateIngestaoJobsTableAsync(MarketDataDbContext db)
-    => db.Database.ExecuteSqlRawAsync("""
-        CREATE TABLE IF NOT EXISTS `ingestao_jobs` (
-          `Id` char(36) COLLATE ascii_general_ci NOT NULL,
-          `File` varchar(255) NOT NULL,
-          `StoredPath` varchar(1024) NOT NULL,
-          `Status` varchar(20) NOT NULL,
-          `CreatedAtUtc` datetime(6) NOT NULL,
-          `StartedAtUtc` datetime(6) NULL,
-          `FinishedAtUtc` datetime(6) NULL,
-          `Saved` int NOT NULL,
-          `Error` varchar(2000) NULL,
-          PRIMARY KEY (`Id`),
-          KEY `ix_ingestao_jobs_createdatutc` (`CreatedAtUtc`),
-          KEY `ix_ingestao_jobs_status` (`Status`)
-        ) CHARACTER SET utf8mb4;
-        """);

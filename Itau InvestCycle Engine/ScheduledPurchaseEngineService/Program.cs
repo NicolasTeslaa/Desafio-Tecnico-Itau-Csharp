@@ -6,7 +6,6 @@ using ScheduledPurchaseEngineService.Repositories;
 using ScheduledPurchaseEngineService.Services;
 using ScheduledPurchaseEngineService.Settings;
 using System.Data.Common;
-using System.Threading;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +14,7 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHealthChecks();
 
 builder.Services.AddScheduledPurchaseDbContext(builder.Configuration);
 
@@ -76,6 +76,7 @@ app.UseCors(); // DefaultPolicy
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();
 
@@ -89,8 +90,15 @@ static async Task EnsureScheduledPurchaseSchemaAsync(IServiceProvider services, 
         {
             using var scope = services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ScheduledPurchaseDbContext>();
+
+            var hasMigrations = db.Database.GetMigrations().Any();
+            if (!hasMigrations)
+            {
+                throw new InvalidOperationException("Nenhuma migration encontrada para ScheduledPurchaseDbContext.");
+            }
+
             await db.Database.MigrateAsync();
-            await EnsureCriticalTablesAsync(db, logger);
+
             logger.LogInformation("Schema do ScheduledPurchase validado com sucesso.");
             return;
         }
@@ -102,89 +110,6 @@ static async Task EnsureScheduledPurchaseSchemaAsync(IServiceProvider services, 
     }
 
     throw new InvalidOperationException("Nao foi possivel preparar o schema do ScheduledPurchase apos multiplas tentativas.");
-}
-
-static async Task EnsureCriticalTablesAsync(ScheduledPurchaseDbContext db, ILogger logger)
-{
-    if (!await TableExistsAsync(db, "conta_master"))
-    {
-        logger.LogWarning("Tabela 'conta_master' ausente apos migrations. Aplicando bootstrap idempotente.");
-        await db.Database.ExecuteSqlRawAsync("""
-            CREATE TABLE IF NOT EXISTS conta_master (
-                Id int NOT NULL AUTO_INCREMENT,
-                ContaGraficaId int NOT NULL,
-                DataCriacao datetime(6) NOT NULL,
-                CONSTRAINT PK_conta_master PRIMARY KEY (Id),
-                CONSTRAINT FK_conta_master_contas_graficas_ContaGraficaId
-                    FOREIGN KEY (ContaGraficaId) REFERENCES contas_graficas (Id)
-                    ON DELETE RESTRICT,
-                CONSTRAINT UX_conta_master_contagrafica UNIQUE (ContaGraficaId)
-            );
-            """);
-    }
-
-    if (!await TableExistsAsync(db, "precos_medios"))
-    {
-        logger.LogWarning("Tabela 'precos_medios' ausente apos migrations. Aplicando bootstrap idempotente.");
-        await db.Database.ExecuteSqlRawAsync("""
-            CREATE TABLE IF NOT EXISTS precos_medios (
-                Id int NOT NULL AUTO_INCREMENT,
-                CustodiaId int NOT NULL,
-                Valor decimal(18,6) NOT NULL,
-                DataAtualizacao datetime(6) NOT NULL,
-                CONSTRAINT PK_precos_medios PRIMARY KEY (Id),
-                CONSTRAINT FK_precos_medios_custodias_CustodiaId
-                    FOREIGN KEY (CustodiaId) REFERENCES custodias (Id)
-                    ON DELETE CASCADE,
-                CONSTRAINT UX_precos_medios_custodia UNIQUE (CustodiaId)
-            );
-            """);
-    }
-
-    await db.Database.ExecuteSqlRawAsync("""
-        INSERT IGNORE INTO conta_master (ContaGraficaId, DataCriacao)
-        SELECT cg.Id, cg.DataCriacao
-        FROM contas_graficas cg
-        WHERE cg.Tipo = 1;
-        """);
-
-    await db.Database.ExecuteSqlRawAsync("""
-        INSERT IGNORE INTO precos_medios (CustodiaId, Valor, DataAtualizacao)
-        SELECT c.Id, c.PrecoMedio, c.DataUltimaAtualizacao
-        FROM custodias c;
-        """);
-}
-
-static async Task<bool> TableExistsAsync(ScheduledPurchaseDbContext db, string tableName)
-{
-    var connection = db.Database.GetDbConnection();
-    var shouldClose = connection.State != System.Data.ConnectionState.Open;
-
-    if (shouldClose)
-        await connection.OpenAsync();
-
-    try
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT COUNT(*)
-            FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @tableName;
-            """;
-
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = "@tableName";
-        parameter.Value = tableName;
-        command.Parameters.Add(parameter);
-
-        var result = await command.ExecuteScalarAsync();
-        return Convert.ToInt32(result) > 0;
-    }
-    finally
-    {
-        if (shouldClose)
-            await connection.CloseAsync();
-    }
 }
 
 static void UseRequestIdHeader(WebApplication app)

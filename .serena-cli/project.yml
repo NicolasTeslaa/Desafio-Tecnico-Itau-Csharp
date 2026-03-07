@@ -1,0 +1,36 @@
+# Serena CLI 项目配置
+# 项目: Desafio-Tecnico-Itau-Csharp
+# 路径: /Users/tesla/Documents/GitHub/Desafio-Tecnico-Itau-Csharp
+# 生成时间: 2026-03-07 13:40:30
+# Python 版本: 3.14.3
+# 兼容性: ✅ 兼容
+
+project_name: "Desafio-Tecnico-Itau-Csharp"
+serena_context: "ide-assistant"
+read_only: false
+auto_start: true
+
+# 包含的工具
+included_tools:
+  - find_symbol
+  - read_file
+  - execute_shell_command
+  - list_dir
+  - get_symbols_overview
+  - search_for_pattern
+
+# 排除的工具
+excluded_tools: []
+
+# 项目特定设置
+project_settings:
+  language_servers: []
+  custom_prompts: []
+  memory_enabled: true
+
+# Python 兼容性信息
+python_compatibility:
+  version: "3.14.3"
+  compatible: true
+  recommended: "3.10+"
+  warning: "Python 版本兼容"

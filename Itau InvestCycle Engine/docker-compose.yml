@@ -76,6 +76,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      scheduled-purchase-engine-service:
+        condition: service_started
 
   scheduled-purchase-engine-service:
     container_name: investcycle-scheduled-purchase

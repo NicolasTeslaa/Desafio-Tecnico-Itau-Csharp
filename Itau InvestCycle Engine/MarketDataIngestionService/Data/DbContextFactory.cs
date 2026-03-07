@@ -26,7 +26,10 @@ public sealed class MarketDataDbContextFactory : IDesignTimeDbContextFactory<Mar
         switch (provider.Trim().ToLowerInvariant())
         {
             case "mysql":
-                optionsBuilder.UseMySql(connectionString, new MySqlServerVersion(ParseMySqlServerVersion(configuration["Database:MySqlServerVersion"])));
+                optionsBuilder.UseMySql(
+                    connectionString,
+                    new MySqlServerVersion(ParseMySqlServerVersion(configuration["Database:MySqlServerVersion"])),
+                    mysql => mysql.MigrationsHistoryTable("__EFMigrationsHistory_MarketData"));
                 break;
             default:
                 throw new NotSupportedException($"Database provider '{provider}' is not supported.");
@@ -55,7 +58,10 @@ public static class MarketDataDbContextRegistrationExtensions
             case "mysql":
                 services.AddDbContext<MarketDataDbContext>(opt =>
                 {
-                    opt.UseMySql(connectionString, new MySqlServerVersion(ParseMySqlServerVersion(configuration["Database:MySqlServerVersion"])));
+                    opt.UseMySql(
+                        connectionString,
+                        new MySqlServerVersion(ParseMySqlServerVersion(configuration["Database:MySqlServerVersion"])),
+                        mysql => mysql.MigrationsHistoryTable("__EFMigrationsHistory_MarketData"));
                 });
                 break;
             default:
